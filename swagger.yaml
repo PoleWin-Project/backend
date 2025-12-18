@@ -1,0 +1,530 @@
+openapi: 3.0.3
+info:
+    title: PoleWin API
+    version: 0.1.0
+    description: >
+        API backend PoleWin (F1) — Express + TypeScript + PostgreSQL/Sequelize.
+servers:
+    - url: http://localhost:8000
+      description: Serveur local
+
+tags:
+    - name: Health
+      description: Endpoints de diagnostic
+    - name: Utilisateurs
+      description: Profil et compte utilisateur
+    - name: Admin
+      description: Administration
+
+paths:
+    /api/health:
+        get:
+            tags: [Santé]
+            summary: Vérifier que l’API est en ligne
+            responses:
+                "200":
+                    description: API opérationnelle
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/HealthResponse"
+
+    /api/db-check:
+        get:
+            tags: [Santé]
+            summary: Vérifier la connexion à la base PostgreSQL
+            responses:
+                "200":
+                    description: Connexion DB OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/DbCheckOkResponse"
+                "500":
+                    description: Connexion DB KO ou requête échouée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/users/me:
+        get:
+            tags: [Utilisateurs]
+            summary: Récupérer mon compte (avec profil + rôles)
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: Informations du compte courant
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/UserMeResponse"
+                "401":
+                    description: JWT manquant ou invalide
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+        patch:
+            tags: [Utilisateurs]
+            summary: Mettre à jour mon compte (user + profil)
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                description: Champs partiels (patch)
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/UpdateMeRequest"
+            responses:
+                "200":
+                    description: Compte mis à jour
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/UserMeResponse"
+                "400":
+                    description: Validation échouée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "401":
+                    description: JWT manquant ou invalide
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "409":
+                    description: Conflit (déjà utilisé)
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/users/{id}/public:
+        get:
+            tags: [Utilisateurs]
+            summary: Récupérer un profil public
+            description: Retourne le profil uniquement si l’utilisateur est actif ET que son profil est public.
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  description: Identifiant utilisateur (BIGINT, renvoyé en string)
+                  schema:
+                      type: string
+                      pattern: "^[0-9]+$"
+            responses:
+                "200":
+                    description: Profil public
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/UserPublicResponse"
+                "404":
+                    description: Profil public introuvable (ou non public / user inactif)
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/admin/users:
+        get:
+            tags: [Admin]
+            summary: Lister les utilisateurs (admin)
+            description: Nécessite un JWT avec le rôle `admin`.
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: q
+                  in: query
+                  required: false
+                  description: Recherche (email ou username)
+                  schema:
+                      type: string
+                      maxLength: 120
+                - name: limit
+                  in: query
+                  required: false
+                  description: Nombre d’éléments (1..100)
+                  schema:
+                      type: integer
+                      minimum: 1
+                      maximum: 100
+                      default: 20
+                - name: offset
+                  in: query
+                  required: false
+                  description: Décalage (>= 0)
+                  schema:
+                      type: integer
+                      minimum: 0
+                      default: 0
+            responses:
+                "200":
+                    description: Liste paginée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/AdminUsersListResponse"
+                "401":
+                    description: JWT manquant ou invalide
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "403":
+                    description: Rôle admin requis
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/admin/users/{id}:
+        patch:
+            tags: [Admin]
+            summary: Modifier un utilisateur (admin)
+            description: >
+                Nécessite un JWT avec le rôle `admin`.
+                Permet d'activer/désactiver un compte et de valider l'email.
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  description: Identifiant utilisateur (BIGINT, renvoyé en string)
+                  schema:
+                      type: string
+                      pattern: "^[0-9]+$"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/AdminUpdateUserRequest"
+            responses:
+                "200":
+                    description: Utilisateur modifié
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/UserMeResponse"
+                "400":
+                    description: Validation échouée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "401":
+                    description: JWT manquant ou invalide
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "403":
+                    description: Rôle admin requis
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "404":
+                    description: Utilisateur introuvable
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+    securitySchemes:
+        bearerAuth:
+            type: http
+            scheme: bearer
+            bearerFormat: JWT
+            description: "JWT dans l’en-tête Authorization: Bearer <token>"
+
+    schemas:
+        HealthResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                service:
+                    type: string
+                    example: PoleWin backend Express
+            required: [status, service]
+
+        DbCheckOkResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                time:
+                    type: string
+                    format: date-time
+                    example: "2025-12-18T08:55:12.123Z"
+            required: [status, time]
+
+        ErrorResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: error
+                code:
+                    type: string
+                    example: VALIDATION_ERROR
+                message:
+                    type: string
+                    example: "Données invalides"
+            required: [status, message]
+
+        Role:
+            type: object
+            properties:
+                name:
+                    type: string
+                    example: admin
+            required: [name]
+
+        UserProfile:
+            type: object
+            properties:
+                displayName:
+                    type: string
+                    nullable: true
+                    example: "Alexandre"
+                avatarUrl:
+                    type: string
+                    nullable: true
+                    example: "https://cdn.polewin.app/avatars/123.png"
+                bio:
+                    type: string
+                    nullable: true
+                    example: "Fan de F1 et de statistiques."
+                favoriteTeamCode:
+                    type: string
+                    nullable: true
+                    example: "ferrari"
+                favoriteDriverCode:
+                    type: string
+                    nullable: true
+                    example: "leclerc"
+                timeZone:
+                    type: string
+                    nullable: true
+                    example: "Europe/Paris"
+                isProfilePublic:
+                    type: boolean
+                    example: true
+                showStats:
+                    type: boolean
+                    example: true
+
+        User:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: BIGINT renvoyé en string
+                    example: "1"
+                email:
+                    type: string
+                    format: email
+                    example: "alex@example.com"
+                username:
+                    type: string
+                    example: "alexf1"
+                dateOfBirth:
+                    type: string
+                    format: date
+                    nullable: true
+                    example: "2001-06-20"
+                country:
+                    type: string
+                    nullable: true
+                    example: "France"
+                language:
+                    type: string
+                    nullable: true
+                    example: "fr"
+                isEmailVerified:
+                    type: boolean
+                    example: false
+                isActive:
+                    type: boolean
+                    example: true
+                lastLoginAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                profile:
+                    $ref: "#/components/schemas/UserProfile"
+                roles:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/Role"
+
+        UserMeResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                user:
+                    $ref: "#/components/schemas/User"
+            required: [status, user]
+
+        UserPublic:
+            type: object
+            properties:
+                id:
+                    type: string
+                    example: "12"
+                username:
+                    type: string
+                    example: "fanF1"
+                country:
+                    type: string
+                    nullable: true
+                language:
+                    type: string
+                    nullable: true
+                createdAt:
+                    type: string
+                    format: date-time
+                profile:
+                    $ref: "#/components/schemas/UserProfile"
+            required: [id, username, createdAt, profile]
+
+        UserPublicResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                user:
+                    $ref: "#/components/schemas/UserPublic"
+            required: [status, user]
+
+        UpdateMeRequest:
+            type: object
+            properties:
+                username:
+                    type: string
+                    minLength: 3
+                    maxLength: 50
+                country:
+                    type: string
+                    nullable: true
+                    maxLength: 100
+                language:
+                    type: string
+                    nullable: true
+                    maxLength: 20
+                dateOfBirth:
+                    type: string
+                    format: date
+                    nullable: true
+                profile:
+                    type: object
+                    properties:
+                        displayName:
+                            type: string
+                            nullable: true
+                            maxLength: 100
+                        avatarUrl:
+                            type: string
+                            nullable: true
+                            maxLength: 500
+                            format: uri
+                        bio:
+                            type: string
+                            nullable: true
+                            maxLength: 2000
+                        favoriteTeamCode:
+                            type: string
+                            nullable: true
+                            maxLength: 50
+                        favoriteDriverCode:
+                            type: string
+                            nullable: true
+                            maxLength: 50
+                        timeZone:
+                            type: string
+                            nullable: true
+                            maxLength: 64
+                        isProfilePublic:
+                            type: boolean
+                        showStats:
+                            type: boolean
+
+        AdminUpdateUserRequest:
+            type: object
+            properties:
+                isActive:
+                    type: boolean
+                isEmailVerified:
+                    type: boolean
+
+        AdminUserListItem:
+            type: object
+            properties:
+                id:
+                    type: string
+                    example: "1"
+                email:
+                    type: string
+                    format: email
+                username:
+                    type: string
+                isActive:
+                    type: boolean
+                isEmailVerified:
+                    type: boolean
+                createdAt:
+                    type: string
+                    format: date-time
+                lastLoginAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                roles:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/Role"
+            required:
+                [id, email, username, isActive, isEmailVerified, createdAt]
+
+        AdminUsersListResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                items:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/AdminUserListItem"
+                total:
+                    type: integer
+                    example: 42
+                limit:
+                    type: integer
+                    example: 20
+                offset:
+                    type: integer
+                    example: 0
+            required: [status, items, total, limit, offset]

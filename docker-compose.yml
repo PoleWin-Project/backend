@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: polewindb
+      POSTGRES_USER: polewin
+      POSTGRES_PASSWORD: polewin
+    volumes:
+      - polewin_pgdata:/var/lib/postgresql/data
+
+volumes:
+  polewin_pgdata:
