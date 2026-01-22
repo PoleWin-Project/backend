@@ -1,78 +1,92 @@
-import { DataTypes, Model, Sequelize } from "sequelize";
-import type { BigId } from "./_types";
+import {
+  DataTypes,
+  InferAttributes,
+  InferCreationAttributes,
+  CreationOptional,
+  Model,
+  Sequelize,
+  Association,
+  HasOneGetAssociationMixin,
+  HasManyGetAssociationsMixin,
+} from "sequelize";
 
-export class UserModel extends Model {
-    declare id: BigId;
-    declare email: string;
-    declare username: string;
-    declare passwordHash: string | null;
-    declare dateOfBirth: string | null;
-    declare country: string | null;
-    declare language: string | null;
-    declare isEmailVerified: boolean;
-    declare isActive: boolean;
-    declare lastLoginAt: Date | null;
-    declare createdAt: Date;
-    declare updatedAt: Date;
-}
+import type { ProfileModel } from "./profile.model";
+import type { ConversationModel } from "./conversation.model";
+import type { MessageModel } from "./message.model";
+import type { PronosticModel } from "./pronostic.model";
+import type { LeagueModel } from "./league.model";
+import type { LeagueMemberModel } from "./leagueMember.model";
 
-export function initUserModel(sequelize: Sequelize) {
+export class UserModel extends Model<
+  InferAttributes<UserModel>,
+  InferCreationAttributes<UserModel>
+> {
+  declare id: CreationOptional<number>;
+  declare email: string;
+  declare username: string;
+  declare passwordHash: string;
+
+  declare lastLoginAt: Date | null;
+
+  declare createdAt: CreationOptional<Date>;
+  declare updatedAt: CreationOptional<Date>;
+
+  // Associations (mixins)
+  declare getProfile: HasOneGetAssociationMixin<ProfileModel>;
+  declare getConversationsAsUser1: HasManyGetAssociationsMixin<ConversationModel>;
+  declare getConversationsAsUser2: HasManyGetAssociationsMixin<ConversationModel>;
+  declare getMessagesSent: HasManyGetAssociationsMixin<MessageModel>;
+  declare getPronostics: HasManyGetAssociationsMixin<PronosticModel>;
+  declare getOwnedLeagues: HasManyGetAssociationsMixin<LeagueModel>;
+  declare getLeagueMemberships: HasManyGetAssociationsMixin<LeagueMemberModel>;
+
+  declare profile?: ProfileModel;
+
+  declare static associations: {
+    profile: Association<UserModel, ProfileModel>;
+    conversationsAsUser1: Association<UserModel, ConversationModel>;
+    conversationsAsUser2: Association<UserModel, ConversationModel>;
+    messagesSent: Association<UserModel, MessageModel>;
+    pronostics: Association<UserModel, PronosticModel>;
+    ownedLeagues: Association<UserModel, LeagueModel>;
+    leagueMemberships: Association<UserModel, LeagueMemberModel>;
+  };
+
+  static initModel(sequelize: Sequelize) {
     UserModel.init(
-        {
-            id: {
-                type: DataTypes.BIGINT,
-                autoIncrement: true,
-                primaryKey: true,
-            },
-            email: {
-                type: DataTypes.STRING(255),
-                allowNull: false,
-                unique: true,
-            },
-            username: {
-                type: DataTypes.STRING(50),
-                allowNull: false,
-                unique: true,
-            },
-            passwordHash: {
-                field: "password_hash",
-                type: DataTypes.STRING(255),
-                allowNull: true,
-            },
-            dateOfBirth: {
-                field: "date_of_birth",
-                type: DataTypes.DATEONLY,
-                allowNull: true,
-            },
-            country: { type: DataTypes.STRING(100), allowNull: true },
-            language: { type: DataTypes.STRING(20), allowNull: true },
-            isEmailVerified: {
-                field: "is_email_verified",
-                type: DataTypes.BOOLEAN,
-                allowNull: false,
-                defaultValue: false,
-            },
-            isActive: {
-                field: "is_active",
-                type: DataTypes.BOOLEAN,
-                allowNull: false,
-                defaultValue: true,
-            },
-            lastLoginAt: {
-                field: "last_login_at",
-                type: DataTypes.DATE,
-                allowNull: true,
-            },
-            createdAt: { field: "created_at", type: DataTypes.DATE },
-            updatedAt: { field: "updated_at", type: DataTypes.DATE },
+      {
+        id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+        email: { type: DataTypes.STRING, allowNull: false, unique: true },
+        username: { type: DataTypes.STRING, allowNull: false, unique: true },
+        passwordHash: {
+          type: DataTypes.STRING,
+          allowNull: false,
+          field: "password_hash",
         },
-        {
-            sequelize,
-            tableName: "users",
-            timestamps: true,
-            createdAt: "created_at",
-            updatedAt: "updated_at",
-            underscored: true,
-        }
+        lastLoginAt: { type: DataTypes.DATE, allowNull: true, field: "last_login_at" },
+        createdAt: {
+          type: DataTypes.DATE,
+          allowNull: false,
+          field: "created_at",
+          defaultValue: DataTypes.NOW,
+        },
+        updatedAt: {
+          type: DataTypes.DATE,
+          allowNull: false,
+          field: "updated_at",
+          defaultValue: DataTypes.NOW,
+        },
+      },
+      {
+        sequelize,
+        tableName: "users",
+        timestamps: true,
+        createdAt: "createdAt",
+        updatedAt: "updatedAt",
+        underscored: true,
+      }
     );
+
+    return UserModel;
+  }
 }

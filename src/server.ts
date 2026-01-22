@@ -9,7 +9,7 @@ import { sequelize } from "./database/sequelize";
 async function bootstrap() {
     await connectToDatabase();
 
-    initModels();
+    initModels(sequelize);
 
     await sequelize.authenticate();
 
