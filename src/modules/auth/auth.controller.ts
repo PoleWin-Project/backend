@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthService } from "./auth.service";
+import { withLinks, registerLinks, loginLinks } from "../../common/utils/hateoas";
 
 export class AuthController {
     constructor(private readonly authService = new AuthService()) {}
@@ -11,7 +12,7 @@ export class AuthController {
                 return res
                     .status(400)
                     .json({ status: "error", message: result.error });
-            return res.status(201).json(result);
+            return res.status(201).json(withLinks(result, registerLinks));
         } catch (e) {
             next(e);
         }
@@ -24,7 +25,7 @@ export class AuthController {
                 return res
                     .status(401)
                     .json({ status: "error", message: result.error });
-            return res.json(result);
+            return res.json(withLinks(result, loginLinks));
         } catch (e) {
             next(e);
         }
@@ -38,7 +39,11 @@ export class AuthController {
                 return res
                     .status(400)
                     .json({ status: "error", message: result.error });
-            return res.json({ status: "ok" });
+            return res.json(withLinks({ status: "ok" }, {
+                self:  { href: "/api/v1/auth/verify-email", method: "GET" as const },
+                login: { href: "/api/v1/auth/login",        method: "POST" as const },
+                me:    { href: "/api/v1/users/me",          method: "GET" as const },
+            }));
         } catch (e) {
             next(e);
         }
@@ -56,7 +61,10 @@ export class AuthController {
                 return res
                     .status(400)
                     .json({ status: "error", message: result.error });
-            return res.json(result);
+            return res.json(withLinks(result, {
+                self: { href: "/api/v1/auth/resend-verify-email", method: "POST" as const },
+                me:   { href: "/api/v1/users/me",                 method: "GET" as const },
+            }));
         } catch (e) {
             next(e);
         }
@@ -74,7 +82,10 @@ export class AuthController {
                 return res
                     .status(400)
                     .json({ status: "error", message: result.error });
-            return res.json({ status: "ok" });
+            return res.json(withLinks({ status: "ok" }, {
+                register: { href: "/api/v1/auth/register", method: "POST" as const },
+                login:    { href: "/api/v1/auth/login",    method: "POST" as const },
+            }));
         } catch (e) {
             next(e);
         }

@@ -1,7 +1,19 @@
 import { getDbClient } from "../../database/pg.client";
 
 export function getHealth() {
-    return { status: "ok", service: "PoleWin backend Express" };
+    const mem = process.memoryUsage();
+    return {
+        status: "ok",
+        service: "PoleWin API",
+        version: "v1",
+        uptimeSec: Math.floor(process.uptime()),
+        memory: {
+            heapUsedMb:  Math.round(mem.heapUsed  / 1024 / 1024),
+            heapTotalMb: Math.round(mem.heapTotal / 1024 / 1024),
+            rssMb:       Math.round(mem.rss       / 1024 / 1024),
+        },
+        timestamp: new Date().toISOString(),
+    };
 }
 
 export async function dbCheck() {

@@ -11,4 +11,6 @@ export const httpErrors = {
         new AppError(404, msg, code),
     conflict: (msg = "Conflict", code = "CONFLICT") =>
         new AppError(409, msg, code),
+    unprocessableEntity: (msg = "Unprocessable entity", code = "UNPROCESSABLE_ENTITY") =>
+        new AppError(422, msg, code),
 };

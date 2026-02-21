@@ -1,8 +1,32 @@
 import "dotenv/config";
+import { z } from "zod";
+
+const EnvSchema = z.object({
+    PORT:                z.coerce.number().int().positive().default(8000),
+    DATABASE_URL:        z.string().min(1, "DATABASE_URL is required"),
+    CORS_ORIGIN:         z.string().default("http://localhost:3000"),
+    NODE_ENV:            z.enum(["development", "test", "production"]).default("development"),
+    JWT_SECRET:          z.string().min(16, "JWT_SECRET must be at least 16 characters"),
+    VERIFY_EMAIL_SECRET: z.string().min(16).optional(),
+});
+
+const result = EnvSchema.safeParse(process.env);
+
+if (!result.success) {
+    const errors = result.error.issues
+        .map(i => `  ${i.path.join(".")}: ${i.message}`)
+        .join("\n");
+    console.error("❌  Invalid environment variables:\n" + errors);
+    // En mode test jest intercepte mal process.exit — on lève une erreur à la place.
+    if (process.env.NODE_ENV === "test") throw new Error("Invalid environment variables:\n" + errors);
+    process.exit(1);
+}
 
 export const env = {
-    port: Number(process.env.PORT ?? 8000),
-    databaseUrl: process.env.DATABASE_URL ?? "",
-    corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:3000",
-    nodeEnv: process.env.NODE_ENV ?? "development",
+    port:               result.data.PORT,
+    databaseUrl:        result.data.DATABASE_URL,
+    corsOrigin:         result.data.CORS_ORIGIN,
+    nodeEnv:            result.data.NODE_ENV,
+    jwtSecret:          result.data.JWT_SECRET,
+    verifyEmailSecret:  result.data.VERIFY_EMAIL_SECRET ?? result.data.JWT_SECRET,
 };

@@ -10,7 +10,7 @@ import {
   BelongsToGetAssociationMixin,
   HasOneGetAssociationMixin,
 } from "sequelize";
-import type { UserModel } from "./user.model";
+import type { UserModel } from "./User.model";
 import type { PredictionModel } from "./prediction.model";
 import type { PronosticSafetyCarModel } from "./pronosticSafetyCar.model";
 import type { PronosticWinnerDriverModel } from "./pronosticWinnerDriver.model";

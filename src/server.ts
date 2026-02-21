@@ -2,6 +2,7 @@ import "./types/express";
 
 import { createApp } from "./app";
 import { env } from "./config/env";
+import { logger } from "./config/logger";
 import { connectToDatabase } from "./database/pg.client";
 import { initModels } from "./database/models";
 import { sequelize } from "./database/sequelize";
@@ -12,24 +13,38 @@ async function bootstrap() {
     initModels(sequelize);
 
     await sequelize.authenticate();
-
-    const [info] = await sequelize.query(
-        "SELECT current_database() as db, current_schema() as schema, inet_server_addr() as host, inet_server_port() as port"
-    );
-    console.log("Sequelize connected to:", info);
-
-    const [tables] = await sequelize.query(`
-    SELECT table_schema, table_name
-    FROM information_schema.tables
-    WHERE table_schema='public'
-    ORDER BY table_name
-  `);
-    console.log("Public tables:", tables);
+    logger.info("Database connection established");
 
     const app = createApp();
-    app.listen(env.port, () => {
-        console.log(`Server listening on http://localhost:${env.port}`);
+
+    const server = app.listen(env.port, () => {
+        logger.info(`Server listening on http://localhost:${env.port}`);
     });
+
+    const shutdown = async (signal: string) => {
+        logger.info(`${signal} received — graceful shutdown starting`);
+        server.close(async () => {
+            try {
+                await sequelize.close();
+                logger.info("Database connection closed");
+                process.exit(0);
+            } catch (err) {
+                logger.error({ err }, "Error during shutdown");
+                process.exit(1);
+            }
+        });
+        // Force exit si le serveur ne se ferme pas dans les 10s
+        setTimeout(() => {
+            logger.error("Graceful shutdown timed out — forcing exit");
+            process.exit(1);
+        }, 10_000).unref();
+    };
+
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGINT",  () => shutdown("SIGINT"));
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+    logger.error({ err }, "Bootstrap failed");
+    process.exit(1);
+});

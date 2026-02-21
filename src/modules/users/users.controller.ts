@@ -1,13 +1,16 @@
 import { Request, Response, NextFunction } from "express";
 import { UsersService } from "./users.service";
+import { withLinks, meLinks, publicProfileLinks } from "../../common/utils/hateoas";
+import { ListUsersQuery } from "./users.dto";
 
 export class UsersController {
     constructor(private readonly service = new UsersService()) {}
 
     me = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const user = await this.service.getMe(req.user!.id);
-            res.json({ status: "ok", user });
+            const userId = req.user!.id;
+            const user = await this.service.getMe(userId);
+            res.json(withLinks({ status: "ok", user }, meLinks(userId)));
         } catch (e) {
             next(e);
         }
@@ -15,8 +18,9 @@ export class UsersController {
 
     updateMe = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const user = await this.service.updateMe(req.user!.id, req.body);
-            res.json({ status: "ok", user });
+            const userId = req.user!.id;
+            const user = await this.service.updateMe(userId, req.body);
+            res.json(withLinks({ status: "ok", user }, meLinks(userId)));
         } catch (e) {
             next(e);
         }
@@ -25,7 +29,7 @@ export class UsersController {
     publicProfile = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const user = await this.service.getPublicProfile(req.params.id);
-            res.json({ status: "ok", user });
+            res.json(withLinks({ status: "ok", user }, publicProfileLinks(req.params.id)));
         } catch (e) {
             next(e);
         }
@@ -33,7 +37,7 @@ export class UsersController {
 
     list = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const data = await this.service.listUsers(req.query as any);
+            const data = await this.service.listUsers(req.query as unknown as ListUsersQuery);
             res.json({ status: "ok", ...data });
         } catch (e) {
             next(e);
@@ -43,7 +47,7 @@ export class UsersController {
     adminUpdate = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const user = await this.service.adminUpdateUser(
-                req.params.id,
+                Number(req.params.id),
                 req.body
             );
             res.json({ status: "ok", user });

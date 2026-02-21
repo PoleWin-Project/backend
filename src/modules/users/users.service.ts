@@ -9,7 +9,7 @@ import {
 export class UsersService {
     constructor(private readonly repo = new UsersRepository()) {}
 
-    async getMe(userId: string) {
+    async getMe(userId: number) {
         const user = await this.repo.findById(userId);
         if (!user) throw httpErrors.notFound("User not found");
         return user;
@@ -28,10 +28,11 @@ export class UsersService {
             total: count,
             limit: query.limit,
             offset: query.offset,
+            hasMore: query.offset + rows.length < count,
         };
     }
 
-    async updateMe(userId: string, input: UpdateMeInput) {
+    async updateMe(userId: number, input: UpdateMeInput) {
         if (input.username) {
             const exists = await this.repo.usernameExists(
                 input.username,
@@ -45,7 +46,7 @@ export class UsersService {
         return updated;
     }
 
-    async adminUpdateUser(userId: string, input: AdminUpdateUserInput) {
+    async adminUpdateUser(userId: number, input: AdminUpdateUserInput) {
         const updated = await this.repo.adminUpdateUser(userId, input);
         if (!updated) throw httpErrors.notFound("User not found");
         return updated;

@@ -7,7 +7,7 @@ export function validateBody(schema: ZodSchema) {
         const parsed = schema.safeParse(req.body);
         if (!parsed.success)
             return next(
-                httpErrors.badRequest(parsed.error.message, "VALIDATION_ERROR")
+                httpErrors.unprocessableEntity(parsed.error.message, "VALIDATION_ERROR")
             );
         req.body = parsed.data;
         next();
@@ -19,7 +19,7 @@ export function validateQuery(schema: ZodSchema) {
         const parsed = schema.safeParse(req.query);
         if (!parsed.success)
             return next(
-                httpErrors.badRequest(parsed.error.message, "VALIDATION_ERROR")
+                httpErrors.unprocessableEntity(parsed.error.message, "VALIDATION_ERROR")
             );
         req.query = parsed.data as any;
         next();

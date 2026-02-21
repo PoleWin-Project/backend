@@ -1,12 +1,22 @@
 import { Op, UniqueConstraintError, Transaction } from "sequelize";
 import { sequelize } from "../../database/sequelize";
-import { UserModel, ProfileModel } from "../../database/models";
+import {
+    UserModel,
+    ProfileModel,
+    PronosticModel,
+    PronosticSafetyCarModel,
+    PronosticWinnerDriverModel,
+    PronosticWinnerTeamModel,
+    LeagueMemberModel,
+    ConversationModel,
+    MessageModel,
+} from "../../database/models";
 
 import { hashPassword, verifyPassword } from "../../common/utils/password";
 import {
     signAccessToken,
     signVerifyEmailToken,
-    verifyToken,
+    verifyEmailToken,
 } from "../../common/utils/jwt";
 import { LoginInput, RegisterInput, VerifyEmailPayload } from "./auth.dto";
 
@@ -97,6 +107,7 @@ export class AuthService {
                 id: user.id,
                 email: user.email,
                 username: user.username,
+                isEmailVerified: user.isEmailVerified,
                 roles,
             },
         };
@@ -105,7 +116,7 @@ export class AuthService {
     async verifyEmail(token: string) {
         if (!token) return { ok: false as const, error: "Missing token" };
 
-        const payload = verifyToken<VerifyEmailPayload>(token);
+        const payload = verifyEmailToken<VerifyEmailPayload>(token);
         if (!payload || payload.purpose !== "verify_email") {
             return { ok: false as const, error: "Invalid token" };
         }
@@ -113,22 +124,26 @@ export class AuthService {
         const user = await UserModel.findByPk(payload.userId);
         if (!user) return { ok: false as const, error: "User not found" };
 
+        await user.update({ isEmailVerified: true });
+
         return { ok: true as const };
     }
 
-    async resendVerifyEmail(userId: string) {
+    async resendVerifyEmail(userId: number) {
         const user = await UserModel.findByPk(userId);
         if (!user) return { ok: false as const, error: "User not found" };
 
-        const verifyEmailToken = signVerifyEmailToken({
-            userId: user.id,
-            purpose: "verify_email",
-        });
+        if (user.isEmailVerified) {
+            return { ok: false as const, error: "Email already verified" };
+        }
 
-        return { ok: true as const, verifyEmailToken };
+        // TODO: envoyer le token par email via un service d'envoi
+        signVerifyEmailToken({ userId: user.id, purpose: "verify_email" });
+
+        return { ok: true as const };
     }
 
-    async deleteAccount(userId: string, password: string) {
+    async deleteAccount(userId: number, password: string) {
         if (!password)
             return { ok: false as const, error: "Password required" };
 
@@ -142,12 +157,65 @@ export class AuthService {
             if (!valid)
                 return { ok: false as const, error: "Invalid password" };
 
+            // Supprime les sous-tables des pronostics avant les pronostics
+            const pronostics = await PronosticModel.findAll({
+                where: { userId },
+                attributes: ["id"],
+                transaction: t,
+            });
+            const pronosticIds = pronostics.map((p) => p.id);
+
+            if (pronosticIds.length > 0) {
+                await PronosticSafetyCarModel.destroy({
+                    where: { pronosticId: pronosticIds },
+                    transaction: t,
+                });
+                await PronosticWinnerDriverModel.destroy({
+                    where: { pronosticId: pronosticIds },
+                    transaction: t,
+                });
+                await PronosticWinnerTeamModel.destroy({
+                    where: { pronosticId: pronosticIds },
+                    transaction: t,
+                });
+                await PronosticModel.destroy({
+                    where: { userId },
+                    transaction: t,
+                });
+            }
+
+            // Supprime les memberships de ligues
+            await LeagueMemberModel.destroy({
+                where: { userId },
+                transaction: t,
+            });
+
+            // Supprime les conversations et leurs messages
+            const conversations = await ConversationModel.findAll({
+                where: {
+                    [Op.or]: [{ user1Id: userId }, { user2Id: userId }],
+                },
+                attributes: ["id"],
+                transaction: t,
+            });
+            const conversationIds = conversations.map((c) => c.id);
+
+            if (conversationIds.length > 0) {
+                await MessageModel.destroy({
+                    where: { conversationId: conversationIds },
+                    transaction: t,
+                });
+                await ConversationModel.destroy({
+                    where: { id: conversationIds },
+                    transaction: t,
+                });
+            }
+
+            // Supprime le profil et l'utilisateur
             await ProfileModel.destroy({
                 where: { userId: user.id },
                 transaction: t,
             });
-
-            // supprime l'utilisateur
             await user.destroy({ transaction: t });
 
             return { ok: true as const };

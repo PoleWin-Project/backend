@@ -1,5 +1,4 @@
-// src/database/models/index.ts
-export { UserModel } from "./user.model";
+export { UserModel } from "./User.model";
 export { ProfileModel } from "./profile.model";
 export { ConversationModel } from "./conversation.model";
 export { MessageModel } from "./message.model";

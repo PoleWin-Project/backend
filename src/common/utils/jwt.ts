@@ -1,25 +1,27 @@
 import jwt from "jsonwebtoken";
 import { AuthUser } from "../security/auth.types";
-
-const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
-const VERIFY_EMAIL_SECRET = process.env.VERIFY_EMAIL_SECRET || JWT_SECRET;
+import { env } from "../../config/env";
 
 export function signAccessToken(payload: AuthUser) {
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: "15m" });
+    return jwt.sign(payload, env.jwtSecret, { expiresIn: "15m" });
 }
 
-export function signVerifyEmailToken(payload: any) {
-    return jwt.sign(payload, VERIFY_EMAIL_SECRET, { expiresIn: "24h" });
+export function signVerifyEmailToken(payload: object) {
+    return jwt.sign(payload, env.verifyEmailSecret, { expiresIn: "24h" });
 }
 
-export function verifyToken<T>(token: string): T | null {
+export function verifyAccessToken<T>(token: string): T | null {
     try {
-        return jwt.verify(token, JWT_SECRET) as T;
+        return jwt.verify(token, env.jwtSecret) as T;
     } catch {
-        try {
-            return jwt.verify(token, VERIFY_EMAIL_SECRET) as T;
-        } catch {
-            return null;
-        }
+        return null;
+    }
+}
+
+export function verifyEmailToken<T>(token: string): T | null {
+    try {
+        return jwt.verify(token, env.verifyEmailSecret) as T;
+    } catch {
+        return null;
     }
 }

@@ -4,7 +4,7 @@ import { UserModel, ProfileModel } from "../../database/models";
 import { ListUsersQuery } from "./users.dto";
 
 export class UsersRepository {
-    async findById(userId: string, tx?: Transaction) {
+    async findById(userId: number, tx?: Transaction) {
         return UserModel.findByPk(userId, {
             transaction: tx,
             attributes: { exclude: ["passwordHash"] as any },
@@ -56,7 +56,7 @@ export class UsersRepository {
         });
     }
 
-    async updateMe(userId: string, patch: any) {
+    async updateMe(userId: number, patch: any) {
         return sequelize.transaction(async (tx) => {
             const user = await UserModel.findByPk(userId, { transaction: tx });
             if (!user) return null;
@@ -76,7 +76,7 @@ export class UsersRepository {
         });
     }
 
-    private async upsertProfile(userId: string, profilePatch: any, tx: Transaction) {
+    private async upsertProfile(userId: number, profilePatch: any, tx: Transaction) {
         const existing = await ProfileModel.findOne({
             where: { userId },
             transaction: tx,
@@ -90,7 +90,7 @@ export class UsersRepository {
         return ProfileModel.create({ userId, ...profilePatch }, { transaction: tx });
     }
 
-    async adminUpdateUser(userId: string, patch: any) {
+    async adminUpdateUser(userId: number, patch: any) {
         return sequelize.transaction(async (tx) => {
             const user = await UserModel.findByPk(userId, { transaction: tx });
             if (!user) return null;
@@ -111,7 +111,7 @@ export class UsersRepository {
         });
     }
 
-    async usernameExists(username: string, excludeUserId?: string) {
+    async usernameExists(username: string, excludeUserId?: number) {
         const where: any = { username };
         if (excludeUserId) where.id = { [Op.ne]: excludeUserId };
         const count = await UserModel.count({ where });

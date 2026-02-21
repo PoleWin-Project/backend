@@ -9,7 +9,7 @@ import {
   BelongsToGetAssociationMixin,
   HasManyGetAssociationsMixin,
 } from "sequelize";
-import type { UserModel } from "./user.model";
+import type { UserModel } from "./User.model";
 import type { MessageModel } from "./message.model";
 
 export class ConversationModel extends Model<
