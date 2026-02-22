@@ -1,4 +1,3 @@
-// src/database/models/pronosticSafetyCar.model.ts
 import {
   DataTypes,
   InferAttributes,
@@ -17,7 +16,6 @@ export class PronosticSafetyCarModel extends Model<
   declare pronosticId: number;
   declare safetyCar: boolean;
 
-  // Associations
   declare getPronostic: BelongsToGetAssociationMixin<PronosticModel>;
   declare pronostic?: PronosticModel;
 

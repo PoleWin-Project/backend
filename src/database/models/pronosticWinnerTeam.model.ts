@@ -1,4 +1,3 @@
-// src/database/models/pronosticWinnerTeam.model.ts
 import {
   DataTypes,
   InferAttributes,

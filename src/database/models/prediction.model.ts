@@ -1,4 +1,3 @@
-// src/database/models/prediction.model.ts
 import {
   DataTypes,
   InferAttributes,
@@ -23,7 +22,6 @@ export class PredictionModel extends Model<
   declare closesAt: Date | null;
   declare createdAt: CreationOptional<Date>;
 
-  // Associations
   declare getPronostics: HasManyGetAssociationsMixin<PronosticModel>;
   declare pronostics?: PronosticModel[];
 

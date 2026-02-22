@@ -10,7 +10,7 @@ import {
 	HasManyGetAssociationsMixin,
 } from "sequelize";
 import type { UserModel } from "./User.model";
-import type { LeagueMemberModel } from "./leagueMember.model";
+import type { LeagueMemberModel } from "./LeagueMember.model";
 
 export class LeagueModel extends Model<
 	InferAttributes<LeagueModel>,

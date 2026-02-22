@@ -1,26 +1,38 @@
 openapi: 3.0.3
 info:
     title: PoleWin API
-    version: 0.1.0
+    version: 1.0.0
     description: >
-        API backend PoleWin (F1) — Express + TypeScript + PostgreSQL/Sequelize.
+        API backend PoleWin (F1) — Express 5 + TypeScript + PostgreSQL/Sequelize.
+
+        **Authentification** : Bearer JWT (access token 15 min).
+        Obtenez un token via `POST /api/v1/auth/login` ou `POST /api/v1/auth/register`,
+        puis rafraîchissez-le via `POST /api/v1/auth/refresh` (refresh token 7 jours).
+
 servers:
     - url: http://localhost:8000
       description: Serveur local
 
 tags:
-    - name: Health
-      description: Endpoints de diagnostic
+    - name: Auth
+      description: Inscription, connexion, tokens, mot de passe
     - name: Utilisateurs
       description: Profil et compte utilisateur
     - name: Admin
-      description: Administration
+      description: Administration (rôle admin requis)
+    - name: Health
+      description: Endpoints de diagnostic
+
+# ─── Paths ────────────────────────────────────────────────────────────────────
 
 paths:
-    /api/health:
+
+    # ── Health ────────────────────────────────────────────────────────────────
+
+    /api/v1/health:
         get:
-            tags: [Santé]
-            summary: Vérifier que l’API est en ligne
+            tags: [Health]
+            summary: Vérifier que l'API est en ligne
             responses:
                 "200":
                     description: API opérationnelle
@@ -28,34 +40,318 @@ paths:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/HealthResponse"
-
-    /api/db-check:
-        get:
-            tags: [Santé]
-            summary: Vérifier la connexion à la base PostgreSQL
-            responses:
-                "200":
-                    description: Connexion DB OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/DbCheckOkResponse"
                 "500":
-                    description: Connexion DB KO ou requête échouée
+                    description: Erreur serveur
                     content:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/ErrorResponse"
 
-    /api/users/me:
+    # ── Auth ──────────────────────────────────────────────────────────────────
+
+    /api/v1/auth/register:
+        post:
+            tags: [Auth]
+            summary: Créer un compte
+            description: >
+                Crée un compte utilisateur. Le mot de passe doit respecter les règles de sécurité :
+                8 caractères minimum, au moins une majuscule, une minuscule, un chiffre et un caractère spécial.
+                Retourne un access token (15 min) et un refresh token (7 jours).
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/RegisterRequest"
+                        example:
+                            email: "alex@example.com"
+                            username: "alexf1"
+                            password: "Passw0rd!"
+                            confirmPassword: "Passw0rd!"
+                            country: "France"
+                            language: "fr"
+            responses:
+                "201":
+                    description: Compte créé
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/AuthTokensResponse"
+                "400":
+                    description: Validation échouée ou email/username déjà utilisé
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "429":
+                    description: Trop de requêtes (rate limit)
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/auth/login:
+        post:
+            tags: [Auth]
+            summary: Connexion
+            description: >
+                Connexion par email ou username. Retourne un access token (15 min)
+                et un refresh token (7 jours).
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/LoginRequest"
+                        example:
+                            identifier: "alex@example.com"
+                            password: "Passw0rd!"
+            responses:
+                "200":
+                    description: Connexion réussie
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/AuthTokensResponse"
+                "401":
+                    description: Identifiants invalides
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "429":
+                    description: Trop de requêtes (rate limit)
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/auth/refresh:
+        post:
+            tags: [Auth]
+            summary: Rafraîchir les tokens
+            description: >
+                Échange un refresh token valide contre un nouvel access token (15 min)
+                et un nouveau refresh token (7 jours). Rotation à chaque appel.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/RefreshTokenRequest"
+            responses:
+                "200":
+                    description: Tokens rafraîchis
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/RefreshResponse"
+                "401":
+                    description: Refresh token invalide ou expiré
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/auth/verify-email:
         get:
-            tags: [Utilisateurs]
-            summary: Récupérer mon compte (avec profil + rôles)
+            tags: [Auth]
+            summary: Vérifier l'adresse email
+            description: Valide le token de vérification d'email envoyé à l'inscription.
+            parameters:
+                - name: token
+                  in: query
+                  required: true
+                  description: Token JWT de vérification d'email
+                  schema:
+                      type: string
+            responses:
+                "200":
+                    description: Email vérifié avec succès
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "400":
+                    description: Token invalide ou expiré
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/auth/resend-verify-email:
+        post:
+            tags: [Auth]
+            summary: Renvoyer l'email de vérification
+            description: Renvoie un token de vérification d'email. Requiert d'être connecté.
             security:
                 - bearerAuth: []
             responses:
                 "200":
-                    description: Informations du compte courant
+                    description: Email renvoyé
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "400":
+                    description: Email déjà vérifié
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "401":
+                    description: JWT manquant ou invalide
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/auth/change-password:
+        post:
+            tags: [Auth]
+            summary: Changer le mot de passe
+            description: >
+                Modifie le mot de passe de l'utilisateur connecté.
+                Le nouveau mot de passe doit respecter les règles de sécurité.
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/ChangePasswordRequest"
+            responses:
+                "200":
+                    description: Mot de passe modifié
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "400":
+                    description: Validation échouée ou mot de passe actuel incorrect
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "401":
+                    description: JWT manquant ou invalide
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/auth/forgot-password:
+        post:
+            tags: [Auth]
+            summary: Demander la réinitialisation du mot de passe
+            description: >
+                Envoie un email de réinitialisation si l'adresse est connue.
+                Retourne toujours 200 pour éviter l'énumération d'emails.
+                Le token de réinitialisation expire après 1 heure.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/ForgotPasswordRequest"
+                        example:
+                            email: "alex@example.com"
+            responses:
+                "200":
+                    description: Demande traitée (email envoyé si l'adresse existe)
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "429":
+                    description: Trop de requêtes (rate limit)
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/auth/reset-password:
+        post:
+            tags: [Auth]
+            summary: Réinitialiser le mot de passe
+            description: >
+                Réinitialise le mot de passe à partir du token reçu par email.
+                Le token expire après 1 heure. Le nouveau mot de passe doit respecter
+                les règles de sécurité.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/ResetPasswordRequest"
+            responses:
+                "200":
+                    description: Mot de passe réinitialisé avec succès
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "400":
+                    description: Token invalide/expiré ou validation échouée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "429":
+                    description: Trop de requêtes (rate limit)
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/auth/delete-account:
+        delete:
+            tags: [Auth]
+            summary: Supprimer le compte
+            description: >
+                Supprime définitivement le compte et toutes les données associées
+                (profil, pronostics, ligues, conversations). Requiert le mot de passe.
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/DeleteAccountRequest"
+            responses:
+                "200":
+                    description: Compte supprimé
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "400":
+                    description: Mot de passe incorrect
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "401":
+                    description: JWT manquant ou invalide
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    # ── Utilisateurs ──────────────────────────────────────────────────────────
+
+    /api/v1/users/me:
+        get:
+            tags: [Utilisateurs]
+            summary: Mon profil complet
+            description: Retourne le compte courant avec profil et rôles.
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: Profil complet
                     content:
                         application/json:
                             schema:
@@ -69,19 +365,19 @@ paths:
 
         patch:
             tags: [Utilisateurs]
-            summary: Mettre à jour mon compte (user + profil)
+            summary: Mettre à jour mon profil
+            description: Patch partiel du compte et/ou du profil utilisateur.
             security:
                 - bearerAuth: []
             requestBody:
                 required: true
-                description: Champs partiels (patch)
                 content:
                     application/json:
                         schema:
                             $ref: "#/components/schemas/UpdateMeRequest"
             responses:
                 "200":
-                    description: Compte mis à jour
+                    description: Profil mis à jour
                     content:
                         application/json:
                             schema:
@@ -99,17 +395,19 @@ paths:
                             schema:
                                 $ref: "#/components/schemas/ErrorResponse"
                 "409":
-                    description: Conflit (déjà utilisé)
+                    description: Conflit (username déjà utilisé)
                     content:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/ErrorResponse"
 
-    /api/users/{id}/public:
+    /api/v1/users/{id}/public:
         get:
             tags: [Utilisateurs]
-            summary: Récupérer un profil public
-            description: Retourne le profil uniquement si l’utilisateur est actif ET que son profil est public.
+            summary: Profil public d'un utilisateur
+            description: >
+                Retourne le profil uniquement si l'utilisateur est actif
+                et que son profil est public.
             parameters:
                 - name: id
                   in: path
@@ -126,31 +424,32 @@ paths:
                             schema:
                                 $ref: "#/components/schemas/UserPublicResponse"
                 "404":
-                    description: Profil public introuvable (ou non public / user inactif)
+                    description: Profil introuvable (ou non public / utilisateur inactif)
                     content:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/ErrorResponse"
 
-    /api/admin/users:
+    # ── Admin ─────────────────────────────────────────────────────────────────
+
+    /api/v1/admin/users:
         get:
             tags: [Admin]
-            summary: Lister les utilisateurs (admin)
-            description: Nécessite un JWT avec le rôle `admin`.
+            summary: Lister les utilisateurs
+            description: Nécessite un JWT avec le rôle `admin`. Liste paginée.
             security:
                 - bearerAuth: []
             parameters:
                 - name: q
                   in: query
                   required: false
-                  description: Recherche (email ou username)
+                  description: Recherche par email ou username
                   schema:
                       type: string
                       maxLength: 120
                 - name: limit
                   in: query
                   required: false
-                  description: Nombre d’éléments (1..100)
                   schema:
                       type: integer
                       minimum: 1
@@ -159,7 +458,6 @@ paths:
                 - name: offset
                   in: query
                   required: false
-                  description: Décalage (>= 0)
                   schema:
                       type: integer
                       minimum: 0
@@ -184,10 +482,10 @@ paths:
                             schema:
                                 $ref: "#/components/schemas/ErrorResponse"
 
-    /api/admin/users/{id}:
+    /api/v1/admin/users/{id}:
         patch:
             tags: [Admin]
-            summary: Modifier un utilisateur (admin)
+            summary: Modifier un utilisateur
             description: >
                 Nécessite un JWT avec le rôle `admin`.
                 Permet d'activer/désactiver un compte et de valider l'email.
@@ -239,59 +537,210 @@ paths:
                             schema:
                                 $ref: "#/components/schemas/ErrorResponse"
 
+# ─── Components ───────────────────────────────────────────────────────────────
+
 components:
     securitySchemes:
         bearerAuth:
             type: http
             scheme: bearer
             bearerFormat: JWT
-            description: "JWT dans l’en-tête Authorization: Bearer <token>"
+            description: "JWT dans l'en-tête Authorization: Bearer <token>"
 
     schemas:
-        HealthResponse:
+
+        # ── Règles de mot de passe ────────────────────────────────────────────
+        # 8 car. min · 1 majuscule · 1 minuscule · 1 chiffre · 1 caractère spécial
+
+        PasswordStrong:
+            type: string
+            minLength: 8
+            maxLength: 200
+            description: >
+                Mot de passe fort : 8 caractères minimum, au moins une majuscule,
+                une minuscule, un chiffre et un caractère spécial (!@#$%^&*…).
+            example: "Passw0rd!"
+
+        # ── Requêtes Auth ─────────────────────────────────────────────────────
+
+        RegisterRequest:
+            type: object
+            required: [email, username, password, confirmPassword]
+            properties:
+                email:
+                    type: string
+                    format: email
+                    maxLength: 255
+                    example: "alex@example.com"
+                username:
+                    type: string
+                    minLength: 3
+                    maxLength: 50
+                    example: "alexf1"
+                password:
+                    $ref: "#/components/schemas/PasswordStrong"
+                confirmPassword:
+                    type: string
+                    description: Doit être identique à `password`
+                    example: "Passw0rd!"
+                dateOfBirth:
+                    type: string
+                    format: date
+                    example: "2001-06-20"
+                country:
+                    type: string
+                    maxLength: 100
+                    example: "France"
+                language:
+                    type: string
+                    maxLength: 20
+                    example: "fr"
+
+        LoginRequest:
+            type: object
+            required: [identifier, password]
+            properties:
+                identifier:
+                    type: string
+                    minLength: 3
+                    maxLength: 255
+                    description: Email ou username
+                    example: "alex@example.com"
+                password:
+                    type: string
+                    minLength: 1
+                    maxLength: 200
+                    example: "Passw0rd!"
+
+        RefreshTokenRequest:
+            type: object
+            required: [refreshToken]
+            properties:
+                refreshToken:
+                    type: string
+                    description: Refresh token JWT (7 jours)
+                    example: "eyJhbGciOiJIUzI1NiJ9..."
+
+        ChangePasswordRequest:
+            type: object
+            required: [currentPassword, newPassword, confirmNewPassword]
+            properties:
+                currentPassword:
+                    type: string
+                    minLength: 1
+                    maxLength: 200
+                    example: "OldPassw0rd!"
+                newPassword:
+                    $ref: "#/components/schemas/PasswordStrong"
+                confirmNewPassword:
+                    type: string
+                    description: Doit être identique à `newPassword`
+                    example: "NewPassw0rd!"
+
+        ForgotPasswordRequest:
+            type: object
+            required: [email]
+            properties:
+                email:
+                    type: string
+                    format: email
+                    maxLength: 255
+                    example: "alex@example.com"
+
+        ResetPasswordRequest:
+            type: object
+            required: [token, newPassword, confirmNewPassword]
+            properties:
+                token:
+                    type: string
+                    description: Token de réinitialisation reçu par email (valide 1h)
+                    example: "eyJhbGciOiJIUzI1NiJ9..."
+                newPassword:
+                    $ref: "#/components/schemas/PasswordStrong"
+                confirmNewPassword:
+                    type: string
+                    description: Doit être identique à `newPassword`
+                    example: "NewPassw0rd!"
+
+        DeleteAccountRequest:
+            type: object
+            required: [password]
+            properties:
+                password:
+                    type: string
+                    minLength: 1
+                    maxLength: 200
+                    example: "Passw0rd!"
+
+        # ── Réponses Auth ─────────────────────────────────────────────────────
+
+        AuthUser:
+            type: object
+            properties:
+                id:
+                    type: string
+                    description: BIGINT renvoyé en string
+                    example: "1"
+                email:
+                    type: string
+                    format: email
+                    example: "alex@example.com"
+                username:
+                    type: string
+                    example: "alexf1"
+                roles:
+                    type: array
+                    items:
+                        type: string
+                    example: ["user"]
+
+        AuthTokensResponse:
+            type: object
+            properties:
+                ok:
+                    type: boolean
+                    example: true
+                accessToken:
+                    type: string
+                    description: JWT d'accès (15 min)
+                    example: "eyJhbGciOiJIUzI1NiJ9..."
+                refreshToken:
+                    type: string
+                    description: JWT de rafraîchissement (7 jours)
+                    example: "eyJhbGciOiJIUzI1NiJ9..."
+                verifyEmailToken:
+                    type: string
+                    description: Token de vérification email (24h) — uniquement à l'inscription
+                    example: "eyJhbGciOiJIUzI1NiJ9..."
+                user:
+                    $ref: "#/components/schemas/AuthUser"
+            required: [ok, accessToken, refreshToken, user]
+
+        RefreshResponse:
+            type: object
+            properties:
+                ok:
+                    type: boolean
+                    example: true
+                accessToken:
+                    type: string
+                    description: Nouvel access token (15 min)
+                    example: "eyJhbGciOiJIUzI1NiJ9..."
+                refreshToken:
+                    type: string
+                    description: Nouveau refresh token (7 jours)
+                    example: "eyJhbGciOiJIUzI1NiJ9..."
+            required: [ok, accessToken, refreshToken]
+
+        StatusOkResponse:
             type: object
             properties:
                 status:
                     type: string
                     example: ok
-                service:
-                    type: string
-                    example: PoleWin backend Express
-            required: [status, service]
+            required: [status]
 
-        DbCheckOkResponse:
-            type: object
-            properties:
-                status:
-                    type: string
-                    example: ok
-                time:
-                    type: string
-                    format: date-time
-                    example: "2025-12-18T08:55:12.123Z"
-            required: [status, time]
-
-        ErrorResponse:
-            type: object
-            properties:
-                status:
-                    type: string
-                    example: error
-                code:
-                    type: string
-                    example: VALIDATION_ERROR
-                message:
-                    type: string
-                    example: "Données invalides"
-            required: [status, message]
-
-        Role:
-            type: object
-            properties:
-                name:
-                    type: string
-                    example: admin
-            required: [name]
+        # ── Utilisateurs ──────────────────────────────────────────────────────
 
         UserProfile:
             type: object
@@ -302,6 +751,7 @@ components:
                     example: "Alexandre"
                 avatarUrl:
                     type: string
+                    format: uri
                     nullable: true
                     example: "https://cdn.polewin.app/avatars/123.png"
                 bio:
@@ -375,7 +825,8 @@ components:
                 roles:
                     type: array
                     items:
-                        $ref: "#/components/schemas/Role"
+                        type: string
+                    example: ["user"]
 
         UserMeResponse:
             type: object
@@ -471,6 +922,8 @@ components:
                         showStats:
                             type: boolean
 
+        # ── Admin ─────────────────────────────────────────────────────────────
+
         AdminUpdateUserRequest:
             type: object
             properties:
@@ -504,9 +957,8 @@ components:
                 roles:
                     type: array
                     items:
-                        $ref: "#/components/schemas/Role"
-            required:
-                [id, email, username, isActive, isEmailVerified, createdAt]
+                        type: string
+            required: [id, email, username, isActive, isEmailVerified, createdAt]
 
         AdminUsersListResponse:
             type: object
@@ -528,3 +980,35 @@ components:
                     type: integer
                     example: 0
             required: [status, items, total, limit, offset]
+
+        # ── Erreurs ───────────────────────────────────────────────────────────
+
+        ErrorResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: error
+                code:
+                    type: string
+                    example: VALIDATION_ERROR
+                message:
+                    type: string
+                    example: "Données invalides"
+            required: [status, message]
+
+        # ── Health ────────────────────────────────────────────────────────────
+
+        HealthResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                service:
+                    type: string
+                    example: PoleWin backend Express
+                db:
+                    type: string
+                    example: ok
+            required: [status, service]

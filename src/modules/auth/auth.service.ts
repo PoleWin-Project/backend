@@ -15,10 +15,20 @@ import {
 import { hashPassword, verifyPassword } from "../../common/utils/password";
 import {
     signAccessToken,
+    signRefreshToken,
     signVerifyEmailToken,
+    signPasswordResetToken,
     verifyEmailToken,
+    verifyRefreshToken,
+    verifyPasswordResetToken,
 } from "../../common/utils/jwt";
-import { LoginInput, RegisterInput, VerifyEmailPayload } from "./auth.dto";
+import {
+    LoginInput,
+    RegisterInput,
+    VerifyEmailPayload,
+    PasswordResetPayload,
+} from "./auth.dto";
+import { AuthUser } from "../../common/security/auth.types";
 
 export class AuthService {
     async register(input: RegisterInput) {
@@ -47,21 +57,24 @@ export class AuthService {
                     });
 
                     const roles = ["user"];
-                    const accessToken = signAccessToken({ id: user.id, roles });
+                    const authUser: AuthUser = { id: user.id, roles };
+                    const accessToken  = signAccessToken(authUser);
+                    const refreshToken = signRefreshToken(authUser);
 
-                    return { user, roles, accessToken, verifyEmailToken };
+                    return { user, roles, accessToken, refreshToken, verifyEmailToken };
                 },
             );
 
             return {
                 ok: true as const,
-                accessToken: created.accessToken,
+                accessToken:      created.accessToken,
+                refreshToken:     created.refreshToken,
                 verifyEmailToken: created.verifyEmailToken,
                 user: {
-                    id: created.user.id,
-                    email: created.user.email,
+                    id:       created.user.id,
+                    email:    created.user.email,
                     username: created.user.username,
-                    roles: created.roles,
+                    roles:    created.roles,
                 },
             };
         } catch (e: any) {
@@ -97,19 +110,43 @@ export class AuthService {
 
         await user.update({ lastLoginAt: new Date() });
 
-        const roles = ["user"]; // pas de table roles => rôle par défaut
-        const accessToken = signAccessToken({ id: user.id, roles });
+        const roles = ["user"];
+        const authUser: AuthUser = { id: user.id, roles };
+        const accessToken  = signAccessToken(authUser);
+        const refreshToken = signRefreshToken(authUser);
 
         return {
             ok: true as const,
             accessToken,
+            refreshToken,
             user: {
-                id: user.id,
-                email: user.email,
-                username: user.username,
+                id:              user.id,
+                email:           user.email,
+                username:        user.username,
                 isEmailVerified: user.isEmailVerified,
                 roles,
             },
+        };
+    }
+
+    async refresh(refreshToken: string) {
+        const payload = verifyRefreshToken<AuthUser & { iat?: number; exp?: number }>(refreshToken);
+        if (!payload) return { ok: false as const, error: "Invalid or expired refresh token" };
+
+        const user = await UserModel.findByPk(payload.id);
+        if (!user) {
+            return { ok: false as const, error: "User not found" };
+        }
+
+        const roles = ["user"];
+        const authUser: AuthUser = { id: user.id, roles };
+        const newAccessToken  = signAccessToken(authUser);
+        const newRefreshToken = signRefreshToken(authUser);
+
+        return {
+            ok: true as const,
+            accessToken:  newAccessToken,
+            refreshToken: newRefreshToken,
         };
     }
 
@@ -137,8 +174,52 @@ export class AuthService {
             return { ok: false as const, error: "Email already verified" };
         }
 
-        // TODO: envoyer le token par email via un service d'envoi
-        signVerifyEmailToken({ userId: user.id, purpose: "verify_email" });
+        const token = signVerifyEmailToken({ userId: user.id, purpose: "verify_email" });
+        void token;
+
+        return { ok: true as const };
+    }
+
+    async changePassword(userId: number, currentPassword: string, newPassword: string) {
+        const user = await UserModel.findByPk(userId);
+        if (!user) return { ok: false as const, error: "User not found" };
+        if (!user.passwordHash) return { ok: false as const, error: "Password not set" };
+
+        const valid = await verifyPassword(currentPassword, user.passwordHash);
+        if (!valid) return { ok: false as const, error: "Current password is incorrect" };
+
+        const newHash = await hashPassword(newPassword);
+        await user.update({ passwordHash: newHash });
+
+        return { ok: true as const };
+    }
+
+    async forgotPassword(email: string) {
+        const user = await UserModel.findOne({ where: { email } });
+
+        if (!user) return { ok: true as const };
+
+        const resetToken = signPasswordResetToken({
+            userId:  user.id,
+            purpose: "reset_password",
+        });
+
+        void resetToken;
+
+        return { ok: true as const };
+    }
+
+    async resetPassword(token: string, newPassword: string) {
+        const payload = verifyPasswordResetToken<PasswordResetPayload>(token);
+        if (!payload || payload.purpose !== "reset_password") {
+            return { ok: false as const, error: "Invalid or expired token" };
+        }
+
+        const user = await UserModel.findByPk(payload.userId);
+        if (!user) return { ok: false as const, error: "User not found" };
+
+        const newHash = await hashPassword(newPassword);
+        await user.update({ passwordHash: newHash });
 
         return { ok: true as const };
     }
@@ -157,7 +238,6 @@ export class AuthService {
             if (!valid)
                 return { ok: false as const, error: "Invalid password" };
 
-            // Supprime les sous-tables des pronostics avant les pronostics
             const pronostics = await PronosticModel.findAll({
                 where: { userId },
                 attributes: ["id"],
@@ -184,13 +264,11 @@ export class AuthService {
                 });
             }
 
-            // Supprime les memberships de ligues
             await LeagueMemberModel.destroy({
                 where: { userId },
                 transaction: t,
             });
 
-            // Supprime les conversations et leurs messages
             const conversations = await ConversationModel.findAll({
                 where: {
                     [Op.or]: [{ user1Id: userId }, { user2Id: userId }],
@@ -211,7 +289,6 @@ export class AuthService {
                 });
             }
 
-            // Supprime le profil et l'utilisateur
             await ProfileModel.destroy({
                 where: { userId: user.id },
                 transaction: t,

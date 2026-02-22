@@ -1,4 +1,3 @@
-// src/database/models/pronostic.model.ts
 import {
   DataTypes,
   InferAttributes,
@@ -24,13 +23,12 @@ export class PronosticModel extends Model<
   declare userId: number;
   declare predictionId: number;
 
-  declare type: string; // ex: 'SAFETY_CAR' | 'WINNER_DRIVER' | ...
-  declare status: CreationOptional<string>; // default 'draft'
+  declare type: string;
+  declare status: CreationOptional<string>;
   declare lockedAt: Date | null;
   declare pointsEarned: CreationOptional<number>;
   declare createdAt: CreationOptional<Date>;
 
-  // Associations
   declare getUser: BelongsToGetAssociationMixin<UserModel>;
   declare getPrediction: BelongsToGetAssociationMixin<PredictionModel>;
 

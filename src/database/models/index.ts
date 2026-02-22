@@ -7,6 +7,6 @@ export { PronosticModel } from "./pronostic.model";
 export { PronosticSafetyCarModel } from "./pronosticSafetyCar.model";
 export { PronosticWinnerDriverModel } from "./pronosticWinnerDriver.model";
 export { PronosticWinnerTeamModel } from "./pronosticWinnerTeam.model";
-export { LeagueModel } from "./league.model";
-export { LeagueMemberModel } from "./leagueMember.model";
+export { LeagueModel } from "./League.model";
+export { LeagueMemberModel } from "./LeagueMember.model";
 export { initModels } from "./initModels";

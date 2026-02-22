@@ -1,4 +1,3 @@
-// src/database/models/pronosticWinnerDriver.model.ts
 import {
   DataTypes,
   InferAttributes,

@@ -13,6 +13,7 @@ import { notFound } from "./common/middleware/notFound";
 import { jwtAuth } from "./common/middleware/jwtAuth";
 import { apiLimiter } from "./common/middleware/rateLimiter";
 import { landingHtml } from "./views/landing";
+import { landingScript } from "./views/landing/script";
 import { rootLinks } from "./common/utils/hateoas";
 
 const API_V1 = "/api/v1";
@@ -20,8 +21,14 @@ const API_V1 = "/api/v1";
 export function createApp() {
 	const app = express();
 
-	// Sécurité — headers HTTP
-	app.use(helmet());
+	app.use(helmet({
+		contentSecurityPolicy: {
+			directives: {
+				...helmet.contentSecurityPolicy.getDefaultDirectives(),
+				"frame-src": ["'self'", "https://www.youtube-nocookie.com"],
+			},
+		},
+	}));
 	app.use(cors({ origin: env.corsOrigin, credentials: true }));
 	app.use(express.json());
 	app.use(pinoHttp({ logger }));
@@ -31,19 +38,20 @@ export function createApp() {
 		res.status(200).type("html").send(landingHtml());
 	});
 
-	// Racine API — redirige vers v1
+	app.get("/landing.js", (_req, res) => {
+		res.type("application/javascript").send(landingScript());
+	});
+
 	app.get("/api", (_req, res) => {
 		res.json({ _links: { v1: { href: "/api/v1", method: "GET" } } });
 	});
 
-	// Découverte v1
 	app.get(API_V1, (_req, res) => {
 		res.json({ _links: rootLinks });
 	});
 
 	app.use(`${API_V1}/docs`, swagger.serve, swagger.setup);
 
-	// Rate limiting global sur l'API
 	app.use(API_V1, apiLimiter);
 
 	app.use(API_V1, healthRoutes);

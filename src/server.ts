@@ -33,7 +33,6 @@ async function bootstrap() {
                 process.exit(1);
             }
         });
-        // Force exit si le serveur ne se ferme pas dans les 10s
         setTimeout(() => {
             logger.error("Graceful shutdown timed out — forcing exit");
             process.exit(1);

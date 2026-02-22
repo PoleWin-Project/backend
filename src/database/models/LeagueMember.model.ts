@@ -1,4 +1,3 @@
-// src/database/models/leagueMember.model.ts
 import {
 	DataTypes,
 	InferAttributes,
@@ -9,7 +8,7 @@ import {
 	Association,
 	BelongsToGetAssociationMixin,
 } from "sequelize";
-import type { LeagueModel } from "./league.model";
+import type { LeagueModel } from "./League.model";
 import type { UserModel } from "./User.model";
 
 export class LeagueMemberModel extends Model<
@@ -21,7 +20,6 @@ export class LeagueMemberModel extends Model<
 	declare userId: number;
 	declare joinedAt: CreationOptional<Date>;
 
-	// Associations
 	declare getLeague: BelongsToGetAssociationMixin<LeagueModel>;
 	declare getUser: BelongsToGetAssociationMixin<UserModel>;
 

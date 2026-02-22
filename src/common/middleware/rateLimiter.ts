@@ -9,7 +9,6 @@ const rateLimitMsg = (code: string) => ({
     message: "Too many requests, please try again later",
 });
 
-/** Routes d'authentification — anti brute-force (10 req / 15 min) */
 export const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,
@@ -19,7 +18,6 @@ export const authLimiter = rateLimit({
     message: rateLimitMsg("TOO_MANY_AUTH_REQUESTS"),
 });
 
-/** API globale (200 req / 15 min) */
 export const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 200,

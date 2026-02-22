@@ -1,4 +1,3 @@
-// src/database/models/message.model.ts
 import {
   DataTypes,
   InferAttributes,
@@ -23,7 +22,6 @@ export class MessageModel extends Model<
   declare isRead: CreationOptional<boolean>;
   declare createdAt: CreationOptional<Date>;
 
-  // Associations
   declare getSender: BelongsToGetAssociationMixin<UserModel>;
   declare getConversation: BelongsToGetAssociationMixin<ConversationModel>;
 

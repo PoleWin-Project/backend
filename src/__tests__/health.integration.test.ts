@@ -5,10 +5,6 @@ import healthRoutes from "../modules/health/health.routes";
 import { errorHandler } from "../common/middleware/errorHandler";
 import { notFound } from "../common/middleware/notFound";
 
-/**
- * Mini-app de test : uniquement les routes health, sans DB.
- * Permet de tester les endpoints sans connexion à PostgreSQL.
- */
 function buildTestApp() {
     const app = express();
     app.use(helmet());

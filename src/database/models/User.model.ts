@@ -14,8 +14,8 @@ import type { ProfileModel } from "./profile.model";
 import type { ConversationModel } from "./conversation.model";
 import type { MessageModel } from "./message.model";
 import type { PronosticModel } from "./pronostic.model";
-import type { LeagueModel } from "./league.model";
-import type { LeagueMemberModel } from "./leagueMember.model";
+import type { LeagueModel } from "./League.model";
+import type { LeagueMemberModel } from "./LeagueMember.model";
 
 export class UserModel extends Model<
 	InferAttributes<UserModel>,
@@ -32,7 +32,6 @@ export class UserModel extends Model<
 	declare createdAt: CreationOptional<Date>;
 	declare updatedAt: CreationOptional<Date>;
 
-	// Associations (mixins)
 	declare getProfile: HasOneGetAssociationMixin<ProfileModel>;
 	declare getConversationsAsUser1: HasManyGetAssociationsMixin<ConversationModel>;
 	declare getConversationsAsUser2: HasManyGetAssociationsMixin<ConversationModel>;

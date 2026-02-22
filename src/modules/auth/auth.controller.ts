@@ -31,6 +31,23 @@ export class AuthController {
         }
     };
 
+    refresh = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { refreshToken } = req.body;
+            const result = await this.authService.refresh(refreshToken);
+            if (!result.ok)
+                return res
+                    .status(401)
+                    .json({ status: "error", message: result.error });
+            return res.json(withLinks(result, {
+                self: { href: "/api/v1/auth/refresh", method: "POST" as const },
+                me:   { href: "/api/v1/users/me",     method: "GET" as const },
+            }));
+        } catch (e) {
+            next(e);
+        }
+    };
+
     verifyEmail = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const token = String(req.query.token || "");
@@ -64,6 +81,54 @@ export class AuthController {
             return res.json(withLinks(result, {
                 self: { href: "/api/v1/auth/resend-verify-email", method: "POST" as const },
                 me:   { href: "/api/v1/users/me",                 method: "GET" as const },
+            }));
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    changePassword = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const userId = req.user!.id;
+            const { currentPassword, newPassword } = req.body;
+            const result = await this.authService.changePassword(userId, currentPassword, newPassword);
+            if (!result.ok)
+                return res
+                    .status(400)
+                    .json({ status: "error", message: result.error });
+            return res.json(withLinks({ status: "ok" }, {
+                self: { href: "/api/v1/auth/change-password", method: "POST" as const },
+                me:   { href: "/api/v1/users/me",             method: "GET" as const },
+            }));
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { email } = req.body;
+            await this.authService.forgotPassword(email);
+            return res.json(withLinks({ status: "ok" }, {
+                self:         { href: "/api/v1/auth/forgot-password", method: "POST" as const },
+                resetPassword: { href: "/api/v1/auth/reset-password", method: "POST" as const },
+            }));
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    resetPassword = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { token, newPassword } = req.body;
+            const result = await this.authService.resetPassword(token, newPassword);
+            if (!result.ok)
+                return res
+                    .status(400)
+                    .json({ status: "error", message: result.error });
+            return res.json(withLinks({ status: "ok" }, {
+                self:  { href: "/api/v1/auth/reset-password", method: "POST" as const },
+                login: { href: "/api/v1/auth/login",          method: "POST" as const },
             }));
         } catch (e) {
             next(e);

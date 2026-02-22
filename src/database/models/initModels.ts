@@ -9,8 +9,8 @@ import { PronosticModel } from "./pronostic.model";
 import { PronosticSafetyCarModel } from "./pronosticSafetyCar.model";
 import { PronosticWinnerDriverModel } from "./pronosticWinnerDriver.model";
 import { PronosticWinnerTeamModel } from "./pronosticWinnerTeam.model";
-import { LeagueModel } from "./league.model";
-import { LeagueMemberModel } from "./leagueMember.model";
+import { LeagueModel } from "./League.model";
+import { LeagueMemberModel } from "./LeagueMember.model";
 
 export function initModels(sequelize: Sequelize) {
 
@@ -46,7 +46,6 @@ export function initModels(sequelize: Sequelize) {
 		foreignKey: "user2Id",
 	});
 
-	// messages
 	ConversationModel.hasMany(MessageModel, {
 		as: "messages",
 		foreignKey: "conversationId",
@@ -62,7 +61,6 @@ export function initModels(sequelize: Sequelize) {
 	});
 	MessageModel.belongsTo(UserModel, { as: "sender", foreignKey: "senderId" });
 
-	// predictions <-> pronostics
 	PredictionModel.hasMany(PronosticModel, {
 		as: "pronostics",
 		foreignKey: "predictionId",
@@ -75,7 +73,6 @@ export function initModels(sequelize: Sequelize) {
 	UserModel.hasMany(PronosticModel, { as: "pronostics", foreignKey: "userId" });
 	PronosticModel.belongsTo(UserModel, { as: "user", foreignKey: "userId" });
 
-	// pronostics sub-tables (1-1 on pronostic_id)
 	PronosticModel.hasOne(PronosticSafetyCarModel, {
 		as: "safetyCar",
 		foreignKey: "pronosticId",
@@ -103,7 +100,6 @@ export function initModels(sequelize: Sequelize) {
 		foreignKey: "pronosticId",
 	});
 
-	// leagues
 	UserModel.hasMany(LeagueModel, {
 		as: "ownedLeagues",
 		foreignKey: "ownerUserId",
