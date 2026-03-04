@@ -22,6 +22,8 @@ tags:
       description: Administration (rôle admin requis)
     - name: Health
       description: Endpoints de diagnostic
+    - name: Badges
+      description: Badges utilisateur — catalogue et attribution
     - name: OpenF1
       description: Données F1 statiques via l'API OpenF1 (public, aucune auth requise)
     - name: OpenF1 Live
@@ -541,6 +543,293 @@ paths:
                             schema:
                                 $ref: "#/components/schemas/ErrorResponse"
 
+    # ── Badges ────────────────────────────────────────────────────────────────
+
+    /api/v1/users/me/badges:
+        get:
+            tags: [Badges]
+            summary: Mes badges
+            description: Retourne tous les badges de l'utilisateur connecté avec la date d'attribution.
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: Liste de badges
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/UserBadgesResponse"
+                "401":
+                    description: JWT manquant ou invalide
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/users/{id}/badges:
+        get:
+            tags: [Badges]
+            summary: Badges d'un utilisateur
+            description: Retourne les badges d'un utilisateur (endpoint public).
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  description: Identifiant utilisateur
+                  schema:
+                      type: string
+                      pattern: "^[0-9]+$"
+            responses:
+                "200":
+                    description: Liste de badges
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/UserBadgesResponse"
+                "404":
+                    description: Utilisateur introuvable
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/admin/badges:
+        get:
+            tags: [Badges]
+            summary: Lister tous les badges
+            description: Retourne le catalogue complet des badges. Nécessite le rôle `admin`.
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: Catalogue de badges
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/BadgesListResponse"
+                "401":
+                    description: JWT manquant ou invalide
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "403":
+                    description: Rôle admin requis
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+        post:
+            tags: [Badges]
+            summary: Créer un badge
+            description: Crée un nouveau badge dans le catalogue. Nécessite le rôle `admin`.
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/CreateBadgeRequest"
+                        example:
+                            name: "Prophète"
+                            code: "prophet"
+                            description: "A prédit le résultat exact 10 fois"
+                            rarity: "rare"
+            responses:
+                "201":
+                    description: Badge créé
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/BadgeResponse"
+                "400":
+                    description: Validation échouée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "401":
+                    description: JWT manquant ou invalide
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "403":
+                    description: Rôle admin requis
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/admin/badges/{badgeId}:
+        patch:
+            tags: [Badges]
+            summary: Modifier un badge
+            description: Met à jour un badge existant. Nécessite le rôle `admin`.
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: badgeId
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 1
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/UpdateBadgeRequest"
+            responses:
+                "200":
+                    description: Badge modifié
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/BadgeResponse"
+                "400":
+                    description: Validation échouée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+                "404":
+                    description: Badge introuvable
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+        delete:
+            tags: [Badges]
+            summary: Supprimer un badge
+            description: Supprime un badge et retire tous les `user_badges` associés (CASCADE). Nécessite le rôle `admin`.
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: badgeId
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 1
+            responses:
+                "200":
+                    description: Badge supprimé
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+                "404":
+                    description: Badge introuvable
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/admin/users/{id}/badges:
+        post:
+            tags: [Badges]
+            summary: Attribuer un badge à un utilisateur
+            description: Attribue manuellement un badge à un utilisateur. Nécessite le rôle `admin`.
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  description: Identifiant utilisateur
+                  schema:
+                      type: string
+                      pattern: "^[0-9]+$"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/AwardBadgeRequest"
+                        example:
+                            badgeId: 3
+            responses:
+                "201":
+                    description: Badge attribué
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/UserBadgeItemResponse"
+                "400":
+                    description: Validation échouée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+                "404":
+                    description: Utilisateur ou badge introuvable
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "409":
+                    description: L'utilisateur possède déjà ce badge
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/admin/users/{id}/badges/{badgeId}:
+        delete:
+            tags: [Badges]
+            summary: Retirer un badge à un utilisateur
+            description: Révoque un badge attribué à un utilisateur. Nécessite le rôle `admin`.
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  description: Identifiant utilisateur
+                  schema:
+                      type: string
+                      pattern: "^[0-9]+$"
+                - name: badgeId
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 3
+            responses:
+                "200":
+                    description: Badge retiré
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+                "404":
+                    description: Badge non attribué à cet utilisateur
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
     # ── OpenF1 REST ───────────────────────────────────────────────────────────
 
     /api/v1/openf1/meetings:
@@ -851,7 +1140,184 @@ components:
             bearerFormat: JWT
             description: "JWT dans l'en-tête Authorization: Bearer <token>"
 
+    responses:
+        Unauthorized:
+            description: JWT manquant ou invalide
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/ErrorResponse"
+        Forbidden:
+            description: Rôle admin requis
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/ErrorResponse"
+
     schemas:
+
+        # ── Badges ────────────────────────────────────────────────────────────
+
+        Badge:
+            type: object
+            properties:
+                id:
+                    type: integer
+                    example: 1
+                name:
+                    type: string
+                    example: "Prophète"
+                code:
+                    type: string
+                    nullable: true
+                    example: "prophet"
+                description:
+                    type: string
+                    nullable: true
+                    example: "A prédit le résultat exact 10 fois"
+                imageUrl:
+                    type: string
+                    format: uri
+                    nullable: true
+                    example: "https://cdn.polewin.app/badges/prophet.png"
+                rarity:
+                    type: string
+                    nullable: true
+                    enum: [common, rare, epic, legendary]
+                    example: "rare"
+                createdAt:
+                    type: string
+                    format: date-time
+            required: [id, name]
+
+        UserBadgeItem:
+            type: object
+            properties:
+                id:
+                    type: integer
+                    example: 42
+                userId:
+                    type: integer
+                    example: 7
+                badgeId:
+                    type: integer
+                    example: 1
+                awardedAt:
+                    type: string
+                    format: date-time
+                    example: "2024-09-01T15:30:00.000Z"
+                badge:
+                    $ref: "#/components/schemas/Badge"
+            required: [id, userId, badgeId, awardedAt]
+
+        BadgesListResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                badges:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/Badge"
+            required: [status, badges]
+
+        BadgeResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                badge:
+                    $ref: "#/components/schemas/Badge"
+            required: [status, badge]
+
+        UserBadgesResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                badges:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/UserBadgeItem"
+            required: [status, badges]
+
+        UserBadgeItemResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                userBadge:
+                    $ref: "#/components/schemas/UserBadgeItem"
+            required: [status, userBadge]
+
+        CreateBadgeRequest:
+            type: object
+            required: [name]
+            properties:
+                name:
+                    type: string
+                    minLength: 1
+                    maxLength: 100
+                    example: "Prophète"
+                code:
+                    type: string
+                    minLength: 1
+                    maxLength: 50
+                    example: "prophet"
+                description:
+                    type: string
+                    nullable: true
+                    maxLength: 1000
+                    example: "A prédit le résultat exact 10 fois"
+                imageUrl:
+                    type: string
+                    nullable: true
+                    format: uri
+                    maxLength: 500
+                    example: "https://cdn.polewin.app/badges/prophet.png"
+                rarity:
+                    type: string
+                    nullable: true
+                    enum: [common, rare, epic, legendary]
+                    example: "rare"
+
+        UpdateBadgeRequest:
+            type: object
+            properties:
+                name:
+                    type: string
+                    minLength: 1
+                    maxLength: 100
+                code:
+                    type: string
+                    minLength: 1
+                    maxLength: 50
+                description:
+                    type: string
+                    nullable: true
+                    maxLength: 1000
+                imageUrl:
+                    type: string
+                    nullable: true
+                    format: uri
+                    maxLength: 500
+                rarity:
+                    type: string
+                    nullable: true
+                    enum: [common, rare, epic, legendary]
+
+        AwardBadgeRequest:
+            type: object
+            required: [badgeId]
+            properties:
+                badgeId:
+                    type: integer
+                    minimum: 1
+                    example: 3
 
         # ── OpenF1 ────────────────────────────────────────────────────────────
 
