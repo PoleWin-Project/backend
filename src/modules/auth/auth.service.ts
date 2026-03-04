@@ -3,13 +3,6 @@ import { sequelize } from "../../database/sequelize";
 import {
     UserModel,
     ProfileModel,
-    PronosticModel,
-    PronosticSafetyCarModel,
-    PronosticWinnerDriverModel,
-    PronosticWinnerTeamModel,
-    LeagueMemberModel,
-    ConversationModel,
-    MessageModel,
 } from "../../database/models";
 
 import { hashPassword, verifyPassword } from "../../common/utils/password";
@@ -238,61 +231,6 @@ export class AuthService {
             if (!valid)
                 return { ok: false as const, error: "Invalid password" };
 
-            const pronostics = await PronosticModel.findAll({
-                where: { userId },
-                attributes: ["id"],
-                transaction: t,
-            });
-            const pronosticIds = pronostics.map((p) => p.id);
-
-            if (pronosticIds.length > 0) {
-                await PronosticSafetyCarModel.destroy({
-                    where: { pronosticId: pronosticIds },
-                    transaction: t,
-                });
-                await PronosticWinnerDriverModel.destroy({
-                    where: { pronosticId: pronosticIds },
-                    transaction: t,
-                });
-                await PronosticWinnerTeamModel.destroy({
-                    where: { pronosticId: pronosticIds },
-                    transaction: t,
-                });
-                await PronosticModel.destroy({
-                    where: { userId },
-                    transaction: t,
-                });
-            }
-
-            await LeagueMemberModel.destroy({
-                where: { userId },
-                transaction: t,
-            });
-
-            const conversations = await ConversationModel.findAll({
-                where: {
-                    [Op.or]: [{ user1Id: userId }, { user2Id: userId }],
-                },
-                attributes: ["id"],
-                transaction: t,
-            });
-            const conversationIds = conversations.map((c) => c.id);
-
-            if (conversationIds.length > 0) {
-                await MessageModel.destroy({
-                    where: { conversationId: conversationIds },
-                    transaction: t,
-                });
-                await ConversationModel.destroy({
-                    where: { id: conversationIds },
-                    transaction: t,
-                });
-            }
-
-            await ProfileModel.destroy({
-                where: { userId: user.id },
-                transaction: t,
-            });
             await user.destroy({ transaction: t });
 
             return { ok: true as const };

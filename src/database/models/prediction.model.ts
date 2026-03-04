@@ -1,58 +1,62 @@
 import {
-  DataTypes,
-  InferAttributes,
-  InferCreationAttributes,
-  CreationOptional,
-  Model,
-  Sequelize,
-  Association,
-  HasManyGetAssociationsMixin,
+	DataTypes,
+	InferAttributes,
+	InferCreationAttributes,
+	CreationOptional,
+	Model,
+	Sequelize,
+	Association,
+	HasManyGetAssociationsMixin,
+	BelongsToGetAssociationMixin,
 } from "sequelize";
 import type { PronosticModel } from "./pronostic.model";
+import type { RaceSessionModel } from "./raceSession.model";
 
 export class PredictionModel extends Model<
-  InferAttributes<PredictionModel>,
-  InferCreationAttributes<PredictionModel>
+	InferAttributes<PredictionModel>,
+	InferCreationAttributes<PredictionModel>
 > {
-  declare id: CreationOptional<number>;
-  declare title: string;
-  declare sessionExternalId: string | null;
-  declare seasonYear: number | null;
-  declare opensAt: Date | null;
-  declare closesAt: Date | null;
-  declare createdAt: CreationOptional<Date>;
+	declare id: CreationOptional<number>;
+	declare sessionId: number;
+	declare title: string;
+	declare scope: string | null;
+	declare closesAt: Date | null;
+	declare createdAt: CreationOptional<Date>;
 
-  declare getPronostics: HasManyGetAssociationsMixin<PronosticModel>;
-  declare pronostics?: PronosticModel[];
+	declare getSession: BelongsToGetAssociationMixin<RaceSessionModel>;
+	declare getPronostics: HasManyGetAssociationsMixin<PronosticModel>;
 
-  declare static associations: {
-    pronostics: Association<PredictionModel, PronosticModel>;
-  };
+	declare session?: RaceSessionModel;
+	declare pronostics?: PronosticModel[];
 
-  static initModel(sequelize: Sequelize) {
-    PredictionModel.init(
-      {
-        id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-        title: { type: DataTypes.STRING, allowNull: false },
-        sessionExternalId: { type: DataTypes.STRING, allowNull: true, field: "session_external_id" },
-        seasonYear: { type: DataTypes.INTEGER, allowNull: true, field: "season_year" },
-        opensAt: { type: DataTypes.DATE, allowNull: true, field: "opens_at" },
-        closesAt: { type: DataTypes.DATE, allowNull: true, field: "closes_at" },
-        createdAt: {
-          type: DataTypes.DATE,
-          allowNull: false,
-          field: "created_at",
-          defaultValue: DataTypes.NOW,
-        },
-      },
-      {
-        sequelize,
-        tableName: "predictions",
-        timestamps: false,
-        underscored: true,
-      }
-    );
+	declare static associations: {
+		session: Association<PredictionModel, RaceSessionModel>;
+		pronostics: Association<PredictionModel, PronosticModel>;
+	};
 
-    return PredictionModel;
-  }
+	static initModel(sequelize: Sequelize) {
+		PredictionModel.init(
+			{
+				id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+				sessionId: { type: DataTypes.INTEGER, allowNull: false, field: "session_id" },
+				title: { type: DataTypes.STRING, allowNull: false },
+				scope: { type: DataTypes.STRING, allowNull: true },
+				closesAt: { type: DataTypes.DATE, allowNull: true, field: "closes_at" },
+				createdAt: {
+					type: DataTypes.DATE,
+					allowNull: false,
+					field: "created_at",
+					defaultValue: DataTypes.NOW,
+				},
+			},
+			{
+				sequelize,
+				tableName: "predictions",
+				timestamps: false,
+				underscored: true,
+			}
+		);
+
+		return PredictionModel;
+	}
 }

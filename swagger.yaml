@@ -22,6 +22,10 @@ tags:
       description: Administration (rôle admin requis)
     - name: Health
       description: Endpoints de diagnostic
+    - name: OpenF1
+      description: Données F1 statiques via l'API OpenF1 (public, aucune auth requise)
+    - name: OpenF1 Live
+      description: Streams temps réel SSE via OpenF1 — connexion persistante
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 
@@ -537,6 +541,306 @@ paths:
                             schema:
                                 $ref: "#/components/schemas/ErrorResponse"
 
+    # ── OpenF1 REST ───────────────────────────────────────────────────────────
+
+    /api/v1/openf1/meetings:
+        get:
+            tags: [OpenF1]
+            summary: Lister les Grands Prix
+            description: Retourne tous les GP de la saison (ou filtrés).
+            parameters:
+                - name: year
+                  in: query
+                  required: false
+                  description: "Année (ex: 2024)"
+                  schema:
+                      type: integer
+                      example: 2024
+                - name: country_code
+                  in: query
+                  required: false
+                  description: "Code pays ISO (ex: IT)"
+                  schema:
+                      type: string
+                      example: IT
+            responses:
+                "200":
+                    description: Liste des GP
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    meetings:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1Meeting"
+                "502":
+                    description: Erreur de communication avec l'API OpenF1
+
+    /api/v1/openf1/meetings/latest:
+        get:
+            tags: [OpenF1]
+            summary: Dernier / prochain Grand Prix
+            description: Retourne le meeting le plus récent selon OpenF1.
+            responses:
+                "200":
+                    description: Grand Prix
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    meeting:
+                                        $ref: "#/components/schemas/F1Meeting"
+
+    /api/v1/openf1/sessions:
+        get:
+            tags: [OpenF1]
+            summary: Lister les sessions
+            description: Retourne les sessions (Qualifications, Race, Sprint…).
+            parameters:
+                - name: meeting_key
+                  in: query
+                  required: false
+                  description: Clé du meeting
+                  schema:
+                      type: integer
+                      example: 1217
+                - name: session_type
+                  in: query
+                  required: false
+                  description: "Type de session (Race, Qualifying, Sprint…)"
+                  schema:
+                      type: string
+                      example: Race
+                - name: year
+                  in: query
+                  required: false
+                  schema:
+                      type: integer
+                      example: 2024
+            responses:
+                "200":
+                    description: Liste des sessions
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    sessions:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1Session"
+
+    /api/v1/openf1/sessions/latest:
+        get:
+            tags: [OpenF1]
+            summary: Session en cours / la plus récente
+            responses:
+                "200":
+                    description: Session
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    session:
+                                        $ref: "#/components/schemas/F1Session"
+
+    /api/v1/openf1/sessions/{sessionKey}:
+        get:
+            tags: [OpenF1]
+            summary: Détail d'une session
+            parameters:
+                - name: sessionKey
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 9158
+            responses:
+                "200":
+                    description: Session
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    session:
+                                        $ref: "#/components/schemas/F1Session"
+                "404":
+                    description: Session introuvable
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/openf1/sessions/{sessionKey}/drivers:
+        get:
+            tags: [OpenF1]
+            summary: Pilotes d'une session
+            parameters:
+                - name: sessionKey
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 9158
+            responses:
+                "200":
+                    description: Liste des pilotes
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    drivers:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1Driver"
+
+    /api/v1/openf1/sessions/{sessionKey}/race-control:
+        get:
+            tags: [OpenF1]
+            summary: Messages Race Control d'une session
+            description: >
+                Retourne les messages de direction de course : drapeaux, safety car,
+                virtual safety car, DRS, etc.
+            parameters:
+                - name: sessionKey
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 9158
+            responses:
+                "200":
+                    description: Événements race control
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    events:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1RaceControl"
+
+    # ── OpenF1 Live (SSE) ─────────────────────────────────────────────────────
+
+    /api/v1/openf1/live/session:
+        get:
+            tags: [OpenF1 Live]
+            summary: Stream SSE — session en cours
+            description: >
+                Connexion **Server-Sent Events** persistante. Envoie la session courante
+                immédiatement (cache), puis toutes les 30 s si elle change.
+
+                **Event name :** `session`
+
+                **Heartbeat :** `:heartbeat` toutes les 15 s pour maintenir la connexion.
+            responses:
+                "200":
+                    description: Stream SSE établi
+                    content:
+                        text/event-stream:
+                            schema:
+                                type: string
+                                example: "event: session\ndata: {\"session_key\": 9158, ...}\n\n"
+
+    /api/v1/openf1/live/race-control:
+        get:
+            tags: [OpenF1 Live]
+            summary: Stream SSE — race control en temps réel
+            description: >
+                Reçoit uniquement les **nouveaux** messages race control toutes les 5 s
+                (safety car, drapeau rouge, VSC, DRS…). Delta-only.
+
+                **Event name :** `race_control`
+            responses:
+                "200":
+                    description: Stream SSE établi
+                    content:
+                        text/event-stream:
+                            schema:
+                                type: string
+                                example: "event: race_control\ndata: [{\"message\": \"SAFETY CAR DEPLOYED\", ...}]\n\n"
+
+    /api/v1/openf1/live/positions:
+        get:
+            tags: [OpenF1 Live]
+            summary: Stream SSE — positions en temps réel
+            description: >
+                Classement complet mis à jour toutes les 5 s (1 entrée par pilote,
+                dédupliquée sur `driver_number`).
+
+                **Event name :** `positions`
+            responses:
+                "200":
+                    description: Stream SSE établi
+                    content:
+                        text/event-stream:
+                            schema:
+                                type: string
+                                example: "event: positions\ndata: [{\"driver_number\": 1, \"position\": 1, ...}]\n\n"
+
+    /api/v1/openf1/live/laps:
+        get:
+            tags: [OpenF1 Live]
+            summary: Stream SSE — tours en temps réel
+            description: >
+                Envoie les nouveaux tours complétés toutes les 10 s. Delta-only.
+
+                **Event name :** `laps`
+            responses:
+                "200":
+                    description: Stream SSE établi
+                    content:
+                        text/event-stream:
+                            schema:
+                                type: string
+                                example: "event: laps\ndata: [{\"driver_number\": 1, \"lap_number\": 12, ...}]\n\n"
+
+    /api/v1/openf1/live/intervals:
+        get:
+            tags: [OpenF1 Live]
+            summary: Stream SSE — intervalles en temps réel
+            description: >
+                Écarts par rapport au leader mis à jour toutes les 10 s
+                (1 entrée par pilote, dédupliquée).
+
+                **Event name :** `intervals`
+            responses:
+                "200":
+                    description: Stream SSE établi
+                    content:
+                        text/event-stream:
+                            schema:
+                                type: string
+                                example: "event: intervals\ndata: [{\"driver_number\": 1, \"gap_to_leader\": 0, ...}]\n\n"
+
 # ─── Components ───────────────────────────────────────────────────────────────
 
 components:
@@ -548,6 +852,209 @@ components:
             description: "JWT dans l'en-tête Authorization: Bearer <token>"
 
     schemas:
+
+        # ── OpenF1 ────────────────────────────────────────────────────────────
+
+        F1Meeting:
+            type: object
+            properties:
+                meeting_key:
+                    type: integer
+                    example: 1217
+                meeting_name:
+                    type: string
+                    example: "Italian Grand Prix"
+                meeting_official_name:
+                    type: string
+                    example: "FORMULA 1 PIRELLI GRAN PREMIO D'ITALIA 2024"
+                circuit_short_name:
+                    type: string
+                    example: "Monza"
+                country_name:
+                    type: string
+                    example: "Italy"
+                country_code:
+                    type: string
+                    example: "IT"
+                location:
+                    type: string
+                    example: "Monza"
+                date_start:
+                    type: string
+                    format: date-time
+                    example: "2024-08-29T11:30:00+00:00"
+                year:
+                    type: integer
+                    example: 2024
+
+        F1Session:
+            type: object
+            properties:
+                session_key:
+                    type: integer
+                    example: 9158
+                meeting_key:
+                    type: integer
+                    example: 1217
+                session_name:
+                    type: string
+                    example: "Race"
+                session_type:
+                    type: string
+                    example: "Race"
+                circuit_short_name:
+                    type: string
+                    example: "Monza"
+                country_name:
+                    type: string
+                    example: "Italy"
+                country_code:
+                    type: string
+                    example: "IT"
+                date_start:
+                    type: string
+                    format: date-time
+                    example: "2024-09-01T13:00:00+00:00"
+                date_end:
+                    type: string
+                    format: date-time
+                    example: "2024-09-01T15:00:00+00:00"
+                year:
+                    type: integer
+                    example: 2024
+
+        F1Driver:
+            type: object
+            properties:
+                driver_number:
+                    type: integer
+                    example: 16
+                full_name:
+                    type: string
+                    example: "Charles LECLERC"
+                name_acronym:
+                    type: string
+                    example: "LEC"
+                team_name:
+                    type: string
+                    example: "Ferrari"
+                team_colour:
+                    type: string
+                    example: "E8002D"
+                country_code:
+                    type: string
+                    example: "MON"
+                headshot_url:
+                    type: string
+                    format: uri
+                    nullable: true
+                    example: "https://www.formula1.com/content/dam/fom-website/drivers/C/CHALEC01_Charles_Leclerc/chalec01.png"
+
+        F1RaceControl:
+            type: object
+            properties:
+                date:
+                    type: string
+                    format: date-time
+                    example: "2024-09-01T13:05:22+00:00"
+                message:
+                    type: string
+                    example: "SAFETY CAR DEPLOYED"
+                flag:
+                    type: string
+                    nullable: true
+                    example: "YELLOW"
+                scope:
+                    type: string
+                    nullable: true
+                    example: "Track"
+                sector:
+                    type: integer
+                    nullable: true
+                    example: null
+                lap_number:
+                    type: integer
+                    nullable: true
+                    example: 12
+                driver_number:
+                    type: integer
+                    nullable: true
+                    example: null
+                session_key:
+                    type: integer
+                    example: 9158
+
+        F1Position:
+            type: object
+            properties:
+                driver_number:
+                    type: integer
+                    example: 1
+                position:
+                    type: integer
+                    example: 1
+                date:
+                    type: string
+                    format: date-time
+                session_key:
+                    type: integer
+                    example: 9158
+
+        F1Lap:
+            type: object
+            properties:
+                driver_number:
+                    type: integer
+                    example: 16
+                lap_number:
+                    type: integer
+                    example: 12
+                lap_duration:
+                    type: number
+                    nullable: true
+                    example: 83.456
+                duration_sector_1:
+                    type: number
+                    nullable: true
+                    example: 27.123
+                duration_sector_2:
+                    type: number
+                    nullable: true
+                    example: 29.456
+                duration_sector_3:
+                    type: number
+                    nullable: true
+                    example: 26.877
+                is_pit_out_lap:
+                    type: boolean
+                    example: false
+                date_start:
+                    type: string
+                    format: date-time
+                session_key:
+                    type: integer
+                    example: 9158
+
+        F1Interval:
+            type: object
+            properties:
+                driver_number:
+                    type: integer
+                    example: 16
+                gap_to_leader:
+                    type: number
+                    nullable: true
+                    example: 4.231
+                interval:
+                    type: number
+                    nullable: true
+                    example: 0.854
+                date:
+                    type: string
+                    format: date-time
+                session_key:
+                    type: integer
+                    example: 9158
 
         # ── Règles de mot de passe ────────────────────────────────────────────
         # 8 car. min · 1 majuscule · 1 minuscule · 1 chiffre · 1 caractère spécial

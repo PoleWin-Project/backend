@@ -29,7 +29,6 @@ export class UsersRepository {
                         "points",
                         "favoriteTeamCode",
                         "favoriteDriverCode",
-                        "timeZone",
                         "isProfilePublic",
                     ],
                 },

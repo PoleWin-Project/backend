@@ -1,73 +1,62 @@
 import {
-  DataTypes,
-  InferAttributes,
-  InferCreationAttributes,
-  CreationOptional,
-  Model,
-  Sequelize,
-  Association,
-  BelongsToGetAssociationMixin,
+	DataTypes,
+	InferAttributes,
+	InferCreationAttributes,
+	CreationOptional,
+	Model,
+	Sequelize,
+	Association,
+	BelongsToGetAssociationMixin,
 } from "sequelize";
 import type { UserModel } from "./User.model";
-import type { ConversationModel } from "./conversation.model";
+import type { ChatChannelModel } from "./chatChannel.model";
 
 export class MessageModel extends Model<
-  InferAttributes<MessageModel>,
-  InferCreationAttributes<MessageModel>
+	InferAttributes<MessageModel>,
+	InferCreationAttributes<MessageModel>
 > {
-  declare id: CreationOptional<number>;
-  declare senderId: number;
-  declare conversationId: number;
-  declare content: string;
-  declare isRead: CreationOptional<boolean>;
-  declare createdAt: CreationOptional<Date>;
+	declare id: CreationOptional<number>;
+	declare senderId: number;
+	declare channelId: number;
+	declare content: string;
+	declare createdAt: CreationOptional<Date>;
 
-  declare getSender: BelongsToGetAssociationMixin<UserModel>;
-  declare getConversation: BelongsToGetAssociationMixin<ConversationModel>;
+	declare getSender: BelongsToGetAssociationMixin<UserModel>;
+	declare getChannel: BelongsToGetAssociationMixin<ChatChannelModel>;
 
-  declare sender?: UserModel;
-  declare conversation?: ConversationModel;
+	declare sender?: UserModel;
+	declare channel?: ChatChannelModel;
 
-  declare static associations: {
-    sender: Association<MessageModel, UserModel>;
-    conversation: Association<MessageModel, ConversationModel>;
-  };
+	declare static associations: {
+		sender: Association<MessageModel, UserModel>;
+		channel: Association<MessageModel, ChatChannelModel>;
+	};
 
-  static initModel(sequelize: Sequelize) {
-    MessageModel.init(
-      {
-        id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-        senderId: { type: DataTypes.INTEGER, allowNull: false, field: "sender_id" },
-        conversationId: {
-          type: DataTypes.INTEGER,
-          allowNull: false,
-          field: "conversation_id",
-        },
-        content: { type: DataTypes.TEXT, allowNull: false },
-        isRead: {
-          type: DataTypes.BOOLEAN,
-          allowNull: false,
-          defaultValue: false,
-          field: "is_read",
-        },
-        createdAt: {
-          type: DataTypes.DATE,
-          allowNull: false,
-          field: "created_at",
-          defaultValue: DataTypes.NOW,
-        },
-      },
-      {
-        sequelize,
-        tableName: "messages",
-        timestamps: false,
-        underscored: true,
-        indexes: [
-          { fields: ["conversation_id", "created_at"], name: "messages_conv_created_idx" },
-        ],
-      }
-    );
+	static initModel(sequelize: Sequelize) {
+		MessageModel.init(
+			{
+				id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+				senderId: { type: DataTypes.INTEGER, allowNull: false, field: "sender_id" },
+				channelId: { type: DataTypes.INTEGER, allowNull: false, field: "channel_id" },
+				content: { type: DataTypes.TEXT, allowNull: false },
+				createdAt: {
+					type: DataTypes.DATE,
+					allowNull: false,
+					field: "created_at",
+					defaultValue: DataTypes.NOW,
+				},
+			},
+			{
+				sequelize,
+				tableName: "messages",
+				timestamps: false,
+				underscored: true,
+				indexes: [
+					{ fields: ["channel_id", "created_at"], name: "messages_channel_created_idx" },
+				],
+			}
+		);
 
-    return MessageModel;
-  }
+		return MessageModel;
+	}
 }

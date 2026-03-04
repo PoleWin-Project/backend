@@ -8,6 +8,7 @@ import { swagger } from "./config/swagger";
 import usersRoutes from "./modules/users/users.routes";
 import authRoutes from "./modules/auth/auth.routes";
 import healthRoutes from "./modules/health/health.routes";
+import openf1Routes from "./modules/openf1/openf1.routes";
 import { errorHandler } from "./common/middleware/errorHandler";
 import { notFound } from "./common/middleware/notFound";
 import { jwtAuth } from "./common/middleware/jwtAuth";
@@ -57,6 +58,7 @@ export function createApp() {
 	app.use(API_V1, healthRoutes);
 	app.use(API_V1, usersRoutes);
 	app.use(API_V1, authRoutes);
+	app.use(API_V1, openf1Routes);
 
 	app.use(notFound);
 	app.use(errorHandler);

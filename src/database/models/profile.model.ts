@@ -26,7 +26,6 @@ export class ProfileModel extends Model<
 	declare favoriteTeamCode: string | null;
 	declare favoriteDriverCode: string | null;
 
-	declare timeZone: string | null;
 	declare isProfilePublic: CreationOptional<boolean>;
 
 	declare createdAt: CreationOptional<Date>;
@@ -70,11 +69,6 @@ export class ProfileModel extends Model<
 					type: DataTypes.STRING,
 					allowNull: true,
 					field: "favorite_driver_code",
-				},
-				timeZone: {
-					type: DataTypes.STRING,
-					allowNull: true,
-					field: "time_zone",
 				},
 				isProfilePublic: {
 					type: DataTypes.BOOLEAN,

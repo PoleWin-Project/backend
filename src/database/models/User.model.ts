@@ -11,11 +11,11 @@ import {
 } from "sequelize";
 
 import type { ProfileModel } from "./profile.model";
-import type { ConversationModel } from "./conversation.model";
 import type { MessageModel } from "./message.model";
 import type { PronosticModel } from "./pronostic.model";
 import type { LeagueModel } from "./League.model";
 import type { LeagueMemberModel } from "./LeagueMember.model";
+import type { UserBadgeModel } from "./userBadge.model";
 
 export class UserModel extends Model<
 	InferAttributes<UserModel>,
@@ -33,23 +33,21 @@ export class UserModel extends Model<
 	declare updatedAt: CreationOptional<Date>;
 
 	declare getProfile: HasOneGetAssociationMixin<ProfileModel>;
-	declare getConversationsAsUser1: HasManyGetAssociationsMixin<ConversationModel>;
-	declare getConversationsAsUser2: HasManyGetAssociationsMixin<ConversationModel>;
 	declare getMessagesSent: HasManyGetAssociationsMixin<MessageModel>;
 	declare getPronostics: HasManyGetAssociationsMixin<PronosticModel>;
 	declare getOwnedLeagues: HasManyGetAssociationsMixin<LeagueModel>;
 	declare getLeagueMemberships: HasManyGetAssociationsMixin<LeagueMemberModel>;
+	declare getUserBadges: HasManyGetAssociationsMixin<UserBadgeModel>;
 
 	declare profile?: ProfileModel;
 
 	declare static associations: {
 		profile: Association<UserModel, ProfileModel>;
-		conversationsAsUser1: Association<UserModel, ConversationModel>;
-		conversationsAsUser2: Association<UserModel, ConversationModel>;
 		messagesSent: Association<UserModel, MessageModel>;
 		pronostics: Association<UserModel, PronosticModel>;
 		ownedLeagues: Association<UserModel, LeagueModel>;
 		leagueMemberships: Association<UserModel, LeagueMemberModel>;
+		userBadges: Association<UserModel, UserBadgeModel>;
 	};
 
 	static initModel(sequelize: Sequelize) {

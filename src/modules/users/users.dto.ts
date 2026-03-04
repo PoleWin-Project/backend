@@ -6,9 +6,6 @@ export const UserIdParamDto = z.object({
 
 export const UpdateMeDto = z.object({
     username: z.string().min(3).max(50).optional(),
-    country: z.string().max(100).optional().nullable(),
-    language: z.string().max(20).optional().nullable(),
-    dateOfBirth: z.string().optional().nullable(),
 
     profile: z
         .object({
@@ -17,15 +14,12 @@ export const UpdateMeDto = z.object({
             bio: z.string().max(2000).optional().nullable(),
             favoriteTeamCode: z.string().max(50).optional().nullable(),
             favoriteDriverCode: z.string().max(50).optional().nullable(),
-            timeZone: z.string().max(64).optional().nullable(),
             isProfilePublic: z.boolean().optional(),
-            showStats: z.boolean().optional(),
         })
         .optional(),
 });
 
 export const AdminUpdateUserDto = z.object({
-    isActive: z.boolean().optional(),
     isEmailVerified: z.boolean().optional(),
 });
 

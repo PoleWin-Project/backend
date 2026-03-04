@@ -2,136 +2,89 @@ import { Sequelize } from "sequelize";
 
 import { UserModel } from "./User.model";
 import { ProfileModel } from "./profile.model";
-import { ConversationModel } from "./conversation.model";
-import { MessageModel } from "./message.model";
+import { RaceSessionModel } from "./raceSession.model";
 import { PredictionModel } from "./prediction.model";
 import { PronosticModel } from "./pronostic.model";
-import { PronosticSafetyCarModel } from "./pronosticSafetyCar.model";
-import { PronosticWinnerDriverModel } from "./pronosticWinnerDriver.model";
-import { PronosticWinnerTeamModel } from "./pronosticWinnerTeam.model";
+import { PronosticDetailModel } from "./pronosticDetail.model";
+import { ChatChannelModel } from "./chatChannel.model";
+import { MessageModel } from "./message.model";
 import { LeagueModel } from "./League.model";
 import { LeagueMemberModel } from "./LeagueMember.model";
+import { BadgeModel } from "./badge.model";
+import { BadgeRuleModel } from "./badgeRule.model";
+import { UserBadgeModel } from "./userBadge.model";
 
 export function initModels(sequelize: Sequelize) {
 
 	UserModel.initModel(sequelize);
 	ProfileModel.initModel(sequelize);
-	ConversationModel.initModel(sequelize);
-	MessageModel.initModel(sequelize);
+	RaceSessionModel.initModel(sequelize);
 	PredictionModel.initModel(sequelize);
 	PronosticModel.initModel(sequelize);
-	PronosticSafetyCarModel.initModel(sequelize);
-	PronosticWinnerDriverModel.initModel(sequelize);
-	PronosticWinnerTeamModel.initModel(sequelize);
+	PronosticDetailModel.initModel(sequelize);
+	ChatChannelModel.initModel(sequelize);
+	MessageModel.initModel(sequelize);
 	LeagueModel.initModel(sequelize);
 	LeagueMemberModel.initModel(sequelize);
+	BadgeModel.initModel(sequelize);
+	BadgeRuleModel.initModel(sequelize);
+	UserBadgeModel.initModel(sequelize);
 
 	UserModel.hasOne(ProfileModel, { as: "profile", foreignKey: "userId" });
 	ProfileModel.belongsTo(UserModel, { as: "user", foreignKey: "userId" });
 
-	UserModel.hasMany(ConversationModel, {
-		as: "conversationsAsUser1",
-		foreignKey: "user1Id",
-	});
-	UserModel.hasMany(ConversationModel, {
-		as: "conversationsAsUser2",
-		foreignKey: "user2Id",
-	});
-	ConversationModel.belongsTo(UserModel, {
-		as: "user1",
-		foreignKey: "user1Id",
-	});
-	ConversationModel.belongsTo(UserModel, {
-		as: "user2",
-		foreignKey: "user2Id",
-	});
+	RaceSessionModel.hasMany(PredictionModel, { as: "predictions", foreignKey: "sessionId" });
+	PredictionModel.belongsTo(RaceSessionModel, { as: "session", foreignKey: "sessionId" });
 
-	ConversationModel.hasMany(MessageModel, {
-		as: "messages",
-		foreignKey: "conversationId",
-	});
-	MessageModel.belongsTo(ConversationModel, {
-		as: "conversation",
-		foreignKey: "conversationId",
-	});
+	RaceSessionModel.hasMany(ChatChannelModel, { as: "chatChannels", foreignKey: "sessionId" });
+	ChatChannelModel.belongsTo(RaceSessionModel, { as: "session", foreignKey: "sessionId" });
 
-	UserModel.hasMany(MessageModel, {
-		as: "messagesSent",
-		foreignKey: "senderId",
-	});
-	MessageModel.belongsTo(UserModel, { as: "sender", foreignKey: "senderId" });
-
-	PredictionModel.hasMany(PronosticModel, {
-		as: "pronostics",
-		foreignKey: "predictionId",
-	});
-	PronosticModel.belongsTo(PredictionModel, {
-		as: "prediction",
-		foreignKey: "predictionId",
-	});
+	PredictionModel.hasMany(PronosticModel, { as: "pronostics", foreignKey: "predictionId" });
+	PronosticModel.belongsTo(PredictionModel, { as: "prediction", foreignKey: "predictionId" });
 
 	UserModel.hasMany(PronosticModel, { as: "pronostics", foreignKey: "userId" });
 	PronosticModel.belongsTo(UserModel, { as: "user", foreignKey: "userId" });
 
-	PronosticModel.hasOne(PronosticSafetyCarModel, {
-		as: "safetyCar",
-		foreignKey: "pronosticId",
-	});
-	PronosticSafetyCarModel.belongsTo(PronosticModel, {
-		as: "pronostic",
-		foreignKey: "pronosticId",
-	});
+	PronosticModel.hasOne(PronosticDetailModel, { as: "detail", foreignKey: "pronosticId" });
+	PronosticDetailModel.belongsTo(PronosticModel, { as: "pronostic", foreignKey: "pronosticId" });
 
-	PronosticModel.hasOne(PronosticWinnerDriverModel, {
-		as: "winnerDriver",
-		foreignKey: "pronosticId",
-	});
-	PronosticWinnerDriverModel.belongsTo(PronosticModel, {
-		as: "pronostic",
-		foreignKey: "pronosticId",
-	});
+	ChatChannelModel.hasMany(MessageModel, { as: "messages", foreignKey: "channelId" });
+	MessageModel.belongsTo(ChatChannelModel, { as: "channel", foreignKey: "channelId" });
 
-	PronosticModel.hasOne(PronosticWinnerTeamModel, {
-		as: "winnerTeam",
-		foreignKey: "pronosticId",
-	});
-	PronosticWinnerTeamModel.belongsTo(PronosticModel, {
-		as: "pronostic",
-		foreignKey: "pronosticId",
-	});
+	UserModel.hasMany(MessageModel, { as: "messagesSent", foreignKey: "senderId" });
+	MessageModel.belongsTo(UserModel, { as: "sender", foreignKey: "senderId" });
 
-	UserModel.hasMany(LeagueModel, {
-		as: "ownedLeagues",
-		foreignKey: "ownerUserId",
-	});
+	UserModel.hasMany(LeagueModel, { as: "ownedLeagues", foreignKey: "ownerUserId" });
 	LeagueModel.belongsTo(UserModel, { as: "owner", foreignKey: "ownerUserId" });
 
-	LeagueModel.hasMany(LeagueMemberModel, {
-		as: "members",
-		foreignKey: "leagueId",
-	});
-	LeagueMemberModel.belongsTo(LeagueModel, {
-		as: "league",
-		foreignKey: "leagueId",
-	});
+	LeagueModel.hasMany(LeagueMemberModel, { as: "members", foreignKey: "leagueId" });
+	LeagueMemberModel.belongsTo(LeagueModel, { as: "league", foreignKey: "leagueId" });
 
-	UserModel.hasMany(LeagueMemberModel, {
-		as: "leagueMemberships",
-		foreignKey: "userId",
-	});
+	UserModel.hasMany(LeagueMemberModel, { as: "leagueMemberships", foreignKey: "userId" });
 	LeagueMemberModel.belongsTo(UserModel, { as: "user", foreignKey: "userId" });
+
+	BadgeModel.hasMany(BadgeRuleModel, { as: "rules", foreignKey: "badgeId" });
+	BadgeRuleModel.belongsTo(BadgeModel, { as: "badge", foreignKey: "badgeId" });
+
+	BadgeModel.hasMany(UserBadgeModel, { as: "userBadges", foreignKey: "badgeId" });
+	UserBadgeModel.belongsTo(BadgeModel, { as: "badge", foreignKey: "badgeId" });
+
+	UserModel.hasMany(UserBadgeModel, { as: "userBadges", foreignKey: "userId" });
+	UserBadgeModel.belongsTo(UserModel, { as: "user", foreignKey: "userId" });
 
 	return {
 		UserModel,
 		ProfileModel,
-		ConversationModel,
-		MessageModel,
+		RaceSessionModel,
 		PredictionModel,
 		PronosticModel,
-		PronosticSafetyCarModel,
-		PronosticWinnerDriverModel,
-		PronosticWinnerTeamModel,
+		PronosticDetailModel,
+		ChatChannelModel,
+		MessageModel,
 		LeagueModel,
 		LeagueMemberModel,
+		BadgeModel,
+		BadgeRuleModel,
+		UserBadgeModel,
 	};
 }

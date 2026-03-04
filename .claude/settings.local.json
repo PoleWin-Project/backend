@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx jest src/modules/openf1/openf1.service.test.ts src/__tests__/openf1.integration.test.ts --no-coverage)"
+    ]
+  }
+}
