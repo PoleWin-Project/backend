@@ -14,7 +14,14 @@
       "Bash(node -e \"let d=''''; process.stdin.on\\(''data'',c=>d+=c\\); process.stdin.on\\(''end'',\\(\\)=>{const j=JSON.parse\\(d\\); console.log\\(''Sessions 2026:'', j.length\\); if\\(j.length\\) console.log\\(JSON.stringify\\(j[0], null, 2\\)\\);}\\);\")",
       "Bash(curl -s \"https://api.openf1.org/v1/meetings?year=2026\")",
       "Bash(node -e \"let d=''''; process.stdin.on\\(''data'',c=>d+=c\\); process.stdin.on\\(''end'',\\(\\)=>{const j=JSON.parse\\(d\\); console.log\\(''Meetings 2026:'', j.length\\);}\\);\")",
-      "Bash(node -e \"let d=''''; process.stdin.on\\(''data'',c=>d+=c\\); process.stdin.on\\(''end'',\\(\\)=>{const j=JSON.parse\\(d\\); const now=new Date\\(\\).toISOString\\(\\); const upcoming=j.filter\\(s=>s.date_start>now\\); console.log\\(''Upcoming 2026:'', upcoming.length\\); upcoming.slice\\(0,5\\).forEach\\(s=>console.log\\(s.session_name, ''|'', s.session_type, ''|'', s.date_start, ''|'', s.location\\)\\);}\\);\")"
+      "Bash(node -e \"let d=''''; process.stdin.on\\(''data'',c=>d+=c\\); process.stdin.on\\(''end'',\\(\\)=>{const j=JSON.parse\\(d\\); const now=new Date\\(\\).toISOString\\(\\); const upcoming=j.filter\\(s=>s.date_start>now\\); console.log\\(''Upcoming 2026:'', upcoming.length\\); upcoming.slice\\(0,5\\).forEach\\(s=>console.log\\(s.session_name, ''|'', s.session_type, ''|'', s.date_start, ''|'', s.location\\)\\);}\\);\")",
+      "Bash(npx jest --testPathPattern=\"sessions.service|predictions.service|users.service|sessions.integration|predictions.integration|users.integration\" --no-coverage)",
+      "Bash(npx jest --testPathPatterns=\"sessions.service|predictions.service|users.service|sessions.integration|predictions.integration|users.integration\" --no-coverage)",
+      "Bash(npx jest --testPathPattern=\"integration\" --no-coverage)",
+      "Bash(npx jest --testPathPatterns=\"integration\" --no-coverage)",
+      "Bash(npx jest \"src/__tests__/sessions.integration.test.ts\" --no-coverage --verbose)",
+      "Bash(node -e \"const e = require\\(''express''\\); console.log\\(e.version || require\\(''./node_modules/express/package.json''\\).version\\)\")",
+      "Bash(npx jest --no-coverage)"
     ]
   }
 }

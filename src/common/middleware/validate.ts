@@ -21,7 +21,7 @@ export function validateQuery(schema: ZodSchema) {
             return next(
                 httpErrors.unprocessableEntity(parsed.error.message, "VALIDATION_ERROR")
             );
-        req.query = parsed.data as any;
+        Object.defineProperty(req, "query", { value: parsed.data, writable: true, configurable: true });
         next();
     };
 }
