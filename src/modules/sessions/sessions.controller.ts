@@ -38,4 +38,12 @@ export class SessionsController {
             res.json({ status: "ok" });
         } catch (e) { next(e); }
     };
+
+    syncFromOpenF1 = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const year = req.query.year ? Number(req.query.year) : undefined;
+            const result = await this.service.syncFromOpenF1(year);
+            res.json({ status: "ok", ...result });
+        } catch (e) { next(e); }
+    };
 }

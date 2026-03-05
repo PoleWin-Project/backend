@@ -59,6 +59,36 @@ paths:
                             schema:
                                 $ref: "#/components/schemas/ErrorResponse"
 
+    /api/v1/version:
+        get:
+            tags: [Health]
+            summary: Version de l'API
+            description: Retourne la version semver du backend lue depuis package.json.
+            responses:
+                "200":
+                    description: Informations de version
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    name:
+                                        type: string
+                                        example: backend
+                                    version:
+                                        type: string
+                                        example: "1.0.0"
+                                    env:
+                                        type: string
+                                        enum: [development, test, production]
+                                        example: production
+                                    api:
+                                        type: string
+                                        example: v1
+
     # ── Auth ──────────────────────────────────────────────────────────────────
 
     /api/v1/auth/register:
@@ -592,6 +622,37 @@ paths:
                                 $ref: "#/components/schemas/SessionResponse"
                 "404":
                     $ref: "#/components/responses/NotFound"
+
+    /api/v1/admin/sessions/sync-openf1:
+        post:
+            tags: [Sessions]
+            summary: Synchroniser les sessions depuis OpenF1 (admin)
+            description: Importe et met à jour les sessions de l'année courante (ou d'une année donnée) depuis l'API OpenF1.
+            security:
+                - bearerAuth: []
+            parameters:
+                - in: query
+                  name: year
+                  schema:
+                      type: integer
+                      example: 2025
+                  description: Année à synchroniser (défaut = année courante)
+            responses:
+                "200":
+                    description: Synchronisation réussie
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:  { type: string, example: ok }
+                                    created: { type: integer, example: 12 }
+                                    updated: { type: integer, example: 3 }
+                                    total:   { type: integer, example: 15 }
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
 
     /api/v1/admin/sessions:
         post:
@@ -1579,6 +1640,145 @@ paths:
                                         items:
                                             $ref: "#/components/schemas/F1Driver"
 
+    /api/v1/openf1/sessions/{sessionKey}/drivers/{driverNumber}/pit:
+        get:
+            tags: [OpenF1]
+            summary: Pit stops d'un pilote
+            parameters:
+                - { name: sessionKey,    in: path, required: true, schema: { type: integer, example: 9158 } }
+                - { name: driverNumber,  in: path, required: true, schema: { type: integer, example: 1 } }
+            responses:
+                "200":
+                    description: Pit stops du pilote
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status: { type: string, example: ok }
+                                    pit: { type: array, items: { $ref: "#/components/schemas/F1Pit" } }
+
+    /api/v1/openf1/sessions/{sessionKey}/drivers/{driverNumber}/stints:
+        get:
+            tags: [OpenF1]
+            summary: Stints d'un pilote
+            parameters:
+                - { name: sessionKey,    in: path, required: true, schema: { type: integer, example: 9158 } }
+                - { name: driverNumber,  in: path, required: true, schema: { type: integer, example: 1 } }
+            responses:
+                "200":
+                    description: Stints du pilote
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status: { type: string, example: ok }
+                                    stints: { type: array, items: { $ref: "#/components/schemas/F1Stint" } }
+
+    /api/v1/openf1/sessions/{sessionKey}/drivers/{driverNumber}/team-radio:
+        get:
+            tags: [OpenF1]
+            summary: Team radio d'un pilote
+            parameters:
+                - { name: sessionKey,    in: path, required: true, schema: { type: integer, example: 9158 } }
+                - { name: driverNumber,  in: path, required: true, schema: { type: integer, example: 1 } }
+            responses:
+                "200":
+                    description: Enregistrements radio du pilote
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status: { type: string, example: ok }
+                                    radio: { type: array, items: { $ref: "#/components/schemas/F1TeamRadio" } }
+
+    /api/v1/openf1/sessions/{sessionKey}/teams:
+        get:
+            tags: [OpenF1]
+            summary: Équipes d'une session
+            description: Retourne les équipes avec leurs pilotes, dérivé des données pilotes.
+            parameters:
+                - name: sessionKey
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 9158
+            responses:
+                "200":
+                    description: Liste des équipes
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    teams:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1Team"
+
+    /api/v1/openf1/sessions/{sessionKey}/teams/{teamName}/pit:
+        get:
+            tags: [OpenF1]
+            summary: Pit stops d'une équipe
+            description: Agrège les pit stops de tous les pilotes de l'équipe, trié par tour.
+            parameters:
+                - { name: sessionKey, in: path, required: true, schema: { type: integer, example: 9158 } }
+                - { name: teamName,   in: path, required: true, schema: { type: string,  example: Ferrari } }
+            responses:
+                "200":
+                    description: Pit stops de l'équipe
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status: { type: string, example: ok }
+                                    pit: { type: array, items: { $ref: "#/components/schemas/F1Pit" } }
+
+    /api/v1/openf1/sessions/{sessionKey}/teams/{teamName}/stints:
+        get:
+            tags: [OpenF1]
+            summary: Stints d'une équipe
+            description: Agrège les stints de tous les pilotes de l'équipe, trié par tour de début.
+            parameters:
+                - { name: sessionKey, in: path, required: true, schema: { type: integer, example: 9158 } }
+                - { name: teamName,   in: path, required: true, schema: { type: string,  example: Ferrari } }
+            responses:
+                "200":
+                    description: Stints de l'équipe
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status: { type: string, example: ok }
+                                    stints: { type: array, items: { $ref: "#/components/schemas/F1Stint" } }
+
+    /api/v1/openf1/sessions/{sessionKey}/teams/{teamName}/team-radio:
+        get:
+            tags: [OpenF1]
+            summary: Team radio d'une équipe
+            description: Agrège les messages radio de tous les pilotes de l'équipe, trié par date.
+            parameters:
+                - { name: sessionKey, in: path, required: true, schema: { type: integer, example: 9158 } }
+                - { name: teamName,   in: path, required: true, schema: { type: string,  example: Ferrari } }
+            responses:
+                "200":
+                    description: Radio de l'équipe
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status: { type: string, example: ok }
+                                    radio: { type: array, items: { $ref: "#/components/schemas/F1TeamRadio" } }
+
     /api/v1/openf1/sessions/{sessionKey}/race-control:
         get:
             tags: [OpenF1]
@@ -1608,6 +1808,222 @@ paths:
                                         type: array
                                         items:
                                             $ref: "#/components/schemas/F1RaceControl"
+
+    /api/v1/openf1/sessions/{sessionKey}/weather:
+        get:
+            tags: [OpenF1]
+            summary: Météo d'une session
+            description: Retourne les relevés météo (température, humidité, pluie, vent).
+            parameters:
+                - name: sessionKey
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 9158
+            responses:
+                "200":
+                    description: Relevés météo
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    weather:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1Weather"
+
+    /api/v1/openf1/sessions/{sessionKey}/pit:
+        get:
+            tags: [OpenF1]
+            summary: Pit stops d'une session
+            description: Retourne tous les arrêts aux stands avec la durée par pilote.
+            parameters:
+                - name: sessionKey
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 9158
+            responses:
+                "200":
+                    description: Pit stops
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    pit:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1Pit"
+
+    /api/v1/openf1/sessions/{sessionKey}/stints:
+        get:
+            tags: [OpenF1]
+            summary: Stints d'une session
+            description: Retourne les stints (compound pneu, tours de début/fin) par pilote.
+            parameters:
+                - name: sessionKey
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 9158
+            responses:
+                "200":
+                    description: Stints
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    stints:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1Stint"
+
+    /api/v1/openf1/sessions/{sessionKey}/team-radio:
+        get:
+            tags: [OpenF1]
+            summary: Team radio d'une session
+            description: Retourne les enregistrements radio équipe avec URL audio.
+            parameters:
+                - name: sessionKey
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 9158
+            responses:
+                "200":
+                    description: Enregistrements radio
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    radio:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1TeamRadio"
+
+    # ── OpenF1 Drivers ────────────────────────────────────────────────────────
+
+    /api/v1/openf1/drivers:
+        get:
+            tags: [OpenF1]
+            summary: Liste des pilotes
+            description: >
+                Retourne les pilotes filtrables par session ou acronyme.
+                Sans paramètre, retourne les pilotes de la session la plus récente.
+            parameters:
+                - name: session_key
+                  in: query
+                  schema:
+                      type: integer
+                      example: 9158
+                - name: name_acronym
+                  in: query
+                  schema:
+                      type: string
+                      example: VER
+            responses:
+                "200":
+                    description: Liste des pilotes
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    drivers:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1Driver"
+
+    /api/v1/openf1/drivers/{driverNumber}:
+        get:
+            tags: [OpenF1]
+            summary: Détail d'un pilote
+            description: Retourne les infos du pilote pour la session spécifiée (ou la dernière connue).
+            parameters:
+                - name: driverNumber
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 1
+                - name: session_key
+                  in: query
+                  schema:
+                      type: integer
+                      example: 9158
+            responses:
+                "200":
+                    description: Détail du pilote
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    driver:
+                                        $ref: "#/components/schemas/F1Driver"
+                "404":
+                    description: Pilote introuvable
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    # ── OpenF1 Teams ──────────────────────────────────────────────────────────
+
+    /api/v1/openf1/teams:
+        get:
+            tags: [OpenF1]
+            summary: Liste des équipes
+            description: >
+                Retourne les équipes avec leurs pilotes dérivées des données OpenF1.
+                Sans paramètre, utilise la dernière session connue.
+            parameters:
+                - name: session_key
+                  in: query
+                  schema:
+                      type: integer
+                      example: 9158
+            responses:
+                "200":
+                    description: Liste des équipes
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    teams:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1Team"
 
     # ── OpenF1 Live (SSE) ─────────────────────────────────────────────────────
 
@@ -2338,6 +2754,35 @@ components:
                     nullable: true
                     example: "https://www.formula1.com/content/dam/fom-website/drivers/C/CHALEC01_Charles_Leclerc/chalec01.png"
 
+        F1Team:
+            type: object
+            properties:
+                team_name:
+                    type: string
+                    example: "Ferrari"
+                team_colour:
+                    type: string
+                    example: "E8002D"
+                drivers:
+                    type: array
+                    items:
+                        type: object
+                        properties:
+                            driver_number:
+                                type: integer
+                                example: 16
+                            name_acronym:
+                                type: string
+                                example: "LEC"
+                            full_name:
+                                type: string
+                                example: "Charles LECLERC"
+                            headshot_url:
+                                type: string
+                                format: uri
+                                nullable: true
+                                example: "https://www.formula1.com/content/dam/fom-website/drivers/C/CHALEC01_Charles_Leclerc/chalec01.png"
+
         F1RaceControl:
             type: object
             properties:
@@ -2368,6 +2813,101 @@ components:
                     type: integer
                     nullable: true
                     example: null
+                session_key:
+                    type: integer
+                    example: 9158
+
+        F1Weather:
+            type: object
+            properties:
+                date:
+                    type: string
+                    format: date-time
+                    example: "2024-09-01T13:05:22+00:00"
+                air_temperature:
+                    type: number
+                    example: 27.8
+                track_temperature:
+                    type: number
+                    example: 52.5
+                humidity:
+                    type: integer
+                    example: 58
+                pressure:
+                    type: number
+                    example: 1018.7
+                rainfall:
+                    type: number
+                    example: 0
+                wind_direction:
+                    type: integer
+                    example: 208
+                wind_speed:
+                    type: number
+                    example: 2.9
+                session_key:
+                    type: integer
+                    example: 9158
+
+        F1Pit:
+            type: object
+            properties:
+                date:
+                    type: string
+                    format: date-time
+                    example: "2024-09-01T13:38:23+00:00"
+                driver_number:
+                    type: integer
+                    example: 1
+                lap_number:
+                    type: integer
+                    example: 5
+                pit_duration:
+                    type: number
+                    nullable: true
+                    example: 24.555
+                session_key:
+                    type: integer
+                    example: 9158
+
+        F1Stint:
+            type: object
+            properties:
+                driver_number:
+                    type: integer
+                    example: 16
+                stint_number:
+                    type: integer
+                    example: 1
+                compound:
+                    type: string
+                    example: SOFT
+                lap_start:
+                    type: integer
+                    example: 1
+                lap_end:
+                    type: integer
+                    example: 20
+                tyre_age_at_start:
+                    type: integer
+                    example: 3
+                session_key:
+                    type: integer
+                    example: 9158
+
+        F1TeamRadio:
+            type: object
+            properties:
+                date:
+                    type: string
+                    format: date-time
+                    example: "2024-09-01T13:38:23+00:00"
+                driver_number:
+                    type: integer
+                    example: 11
+                recording_url:
+                    type: string
+                    example: "https://livetiming.formula1.com/static/..."
                 session_key:
                     type: integer
                     example: 9158

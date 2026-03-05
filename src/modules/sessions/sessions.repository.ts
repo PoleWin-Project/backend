@@ -1,5 +1,6 @@
 import { RaceSessionModel } from "../../database/models";
 import { CreateSessionInput, ListSessionsQuery, UpdateSessionInput } from "./sessions.dto";
+import { OpenF1Session } from "../openf1/openf1.types";
 
 export class SessionsRepository {
     findAll(query: ListSessionsQuery) {
@@ -39,5 +40,27 @@ export class SessionsRepository {
         if (!session) return false;
         await session.destroy();
         return true;
+    }
+
+    async upsertFromOpenF1(sessions: OpenF1Session[]): Promise<{ created: number; updated: number }> {
+        let created = 0, updated = 0;
+        for (const s of sessions) {
+            const defaults = {
+                name:      `${s.country_name} - ${s.session_name}`,
+                type:      s.session_type,
+                dateStart: new Date(s.date_start),
+            };
+            const [session, wasCreated] = await RaceSessionModel.findOrCreate({
+                where:    { idCourseExternal: s.session_key },
+                defaults: { idCourseExternal: s.session_key, ...defaults },
+            });
+            if (wasCreated) {
+                created++;
+            } else {
+                await session.update(defaults);
+                updated++;
+            }
+        }
+        return { created, updated };
     }
 }

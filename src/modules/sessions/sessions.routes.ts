@@ -10,8 +10,9 @@ const ctrl = new SessionsController();
 router.get("/sessions",              validateQuery(ListSessionsQueryDto), ctrl.list);
 router.get("/sessions/:sessionId",                                        ctrl.getById);
 
-router.post("/admin/sessions",            requireRole("admin"), validateBody(CreateSessionDto), ctrl.create);
-router.patch("/admin/sessions/:sessionId", requireRole("admin"), validateBody(UpdateSessionDto), ctrl.update);
+router.post("/admin/sessions/sync-openf1",  requireRole("admin"),                               ctrl.syncFromOpenF1);
+router.post("/admin/sessions",              requireRole("admin"), validateBody(CreateSessionDto), ctrl.create);
+router.patch("/admin/sessions/:sessionId",  requireRole("admin"), validateBody(UpdateSessionDto), ctrl.update);
 router.delete("/admin/sessions/:sessionId", requireRole("admin"),                               ctrl.delete);
 
 export default router;

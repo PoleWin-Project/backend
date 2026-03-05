@@ -1,11 +1,12 @@
 import { getDbClient } from "../../database/pg.client";
+import { appVersion } from "../../config/version";
 
 export function getHealth() {
     const mem = process.memoryUsage();
     return {
         status: "ok",
         service: "PoleWin API",
-        version: "v1",
+        version: appVersion,
         uptimeSec: Math.floor(process.uptime()),
         memory: {
             heapUsedMb:  Math.round(mem.heapUsed  / 1024 / 1024),

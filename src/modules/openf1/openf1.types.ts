@@ -93,6 +93,58 @@ export interface OpenF1Interval {
     session_key:    number;
 }
 
+export interface OpenF1Weather {
+    air_temperature:    number;
+    date:               string;
+    humidity:           number;
+    meeting_key:        number;
+    pressure:           number;
+    rainfall:           number;
+    session_key:        number;
+    track_temperature:  number;
+    wind_direction:     number;
+    wind_speed:         number;
+}
+
+export interface OpenF1Pit {
+    date:           string;
+    driver_number:  number;
+    lap_number:     number;
+    meeting_key:    number;
+    pit_duration:   number | null;
+    session_key:    number;
+}
+
+export interface OpenF1Stint {
+    compound:           string;
+    driver_number:      number;
+    lap_end:            number;
+    lap_start:          number;
+    meeting_key:        number;
+    session_key:        number;
+    stint_number:       number;
+    tyre_age_at_start:  number;
+}
+
+export interface OpenF1TeamRadio {
+    date:           string;
+    driver_number:  number;
+    meeting_key:    number;
+    recording_url:  string;
+    session_key:    number;
+}
+
+export interface OpenF1Team {
+    team_name:   string;
+    team_colour: string;
+    drivers:     Pick<OpenF1Driver, "driver_number" | "name_acronym" | "full_name" | "headshot_url">[];
+}
+
+export interface OpenF1DriverParams {
+    session_key?:  number | string;
+    name_acronym?: string;
+}
+
 export interface OpenF1SessionParams {
     meeting_key?:   number;
     session_type?:  string;

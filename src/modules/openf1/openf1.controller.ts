@@ -104,4 +104,154 @@ export class OpenF1Controller {
             next(e);
         }
     };
+
+    getWeather = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const weather = await this.service.getWeather(Number(req.params.sessionKey));
+            res.json({ status: "ok", weather });
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    getPitStops = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const pit = await this.service.getPitStops(Number(req.params.sessionKey));
+            res.json({ status: "ok", pit });
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    getStints = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const stints = await this.service.getStints(Number(req.params.sessionKey));
+            res.json({ status: "ok", stints });
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    getTeamRadio = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const radio = await this.service.getTeamRadio(Number(req.params.sessionKey));
+            res.json({ status: "ok", radio });
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    // ── Drivers ───────────────────────────────────────────────────────────────
+
+    listDrivers = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const params = {
+                session_key:  req.query.session_key ? Number(req.query.session_key) : undefined,
+                name_acronym: req.query.name_acronym as string | undefined,
+            };
+            const drivers = await this.service.listDrivers(params);
+            res.json({ status: "ok", drivers });
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    getDriverByNumber = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const sessionKey = req.query.session_key ? Number(req.query.session_key) : undefined;
+            const driver = await this.service.getDriverByNumber(Number(req.params.driverNumber), sessionKey);
+            if (!driver) {
+                res.status(404).json({ status: "error", message: "Driver not found" });
+                return;
+            }
+            res.json({ status: "ok", driver });
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    getSessionTeams = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const teams = await this.service.getTeamsForSession(Number(req.params.sessionKey));
+            res.json({ status: "ok", teams });
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    // ── Teams ─────────────────────────────────────────────────────────────────
+
+    listTeams = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const sessionKey = req.query.session_key ? Number(req.query.session_key) : undefined;
+            const teams = await this.service.listTeams(sessionKey);
+            res.json({ status: "ok", teams });
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    // ── Sub-routes by driver ──────────────────────────────────────────────────
+
+    getDriverPit = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const pit = await this.service.getPitStopsByDriver(
+                Number(req.params.sessionKey),
+                Number(req.params.driverNumber),
+            );
+            res.json({ status: "ok", pit });
+        } catch (e) { next(e); }
+    };
+
+    getDriverStints = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const stints = await this.service.getStintsByDriver(
+                Number(req.params.sessionKey),
+                Number(req.params.driverNumber),
+            );
+            res.json({ status: "ok", stints });
+        } catch (e) { next(e); }
+    };
+
+    getDriverTeamRadio = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const radio = await this.service.getTeamRadioByDriver(
+                Number(req.params.sessionKey),
+                Number(req.params.driverNumber),
+            );
+            res.json({ status: "ok", radio });
+        } catch (e) { next(e); }
+    };
+
+    // ── Sub-routes by team ────────────────────────────────────────────────────
+
+    getTeamPit = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const pit = await this.service.getPitStopsByTeam(
+                Number(req.params.sessionKey),
+                req.params.teamName,
+            );
+            res.json({ status: "ok", pit });
+        } catch (e) { next(e); }
+    };
+
+    getTeamStints = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const stints = await this.service.getStintsByTeam(
+                Number(req.params.sessionKey),
+                req.params.teamName,
+            );
+            res.json({ status: "ok", stints });
+        } catch (e) { next(e); }
+    };
+
+    getTeamTeamRadio = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const radio = await this.service.getTeamRadioByTeam(
+                Number(req.params.sessionKey),
+                req.params.teamName,
+            );
+            res.json({ status: "ok", radio });
+        } catch (e) { next(e); }
+    };
 }

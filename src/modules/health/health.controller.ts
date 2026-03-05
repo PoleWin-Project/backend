@@ -1,11 +1,13 @@
 import { Request, Response } from "express";
 import * as healthService from "./health.service";
+import { appVersion, appName } from "../../config/version";
+import { env } from "../../config/env";
 
-export function health(req: Request, res: Response) {
+export function health(_req: Request, res: Response) {
     res.json(healthService.getHealth());
 }
 
-export async function dbCheck(req: Request, res: Response) {
+export async function dbCheck(_req: Request, res: Response) {
     const result = await healthService.dbCheck();
 
     if (!result.ok) {
@@ -13,4 +15,14 @@ export async function dbCheck(req: Request, res: Response) {
     }
 
     return res.json({ status: "ok", time: result.now });
+}
+
+export function version(_req: Request, res: Response) {
+    res.json({
+        status:  "ok",
+        name:    appName,
+        version: appVersion,
+        env:     env.nodeEnv,
+        api:     "v1",
+    });
 }

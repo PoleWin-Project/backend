@@ -21,7 +21,8 @@
       "Bash(npx jest --testPathPatterns=\"integration\" --no-coverage)",
       "Bash(npx jest \"src/__tests__/sessions.integration.test.ts\" --no-coverage --verbose)",
       "Bash(node -e \"const e = require\\(''express''\\); console.log\\(e.version || require\\(''./node_modules/express/package.json''\\).version\\)\")",
-      "Bash(npx jest --no-coverage)"
+      "Bash(npx jest --no-coverage)",
+      "Bash(node -e \"const p=require\\(''./package.json''\\); console.log\\(p.version, p.name\\)\")"
     ]
   }
 }
