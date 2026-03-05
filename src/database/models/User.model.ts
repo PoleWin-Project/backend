@@ -26,6 +26,7 @@ export class UserModel extends Model<
 	declare username: string;
 	declare passwordHash: string;
 
+	declare role: CreationOptional<string>;
 	declare isEmailVerified: CreationOptional<boolean>;
 	declare lastLoginAt: Date | null;
 
@@ -60,6 +61,11 @@ export class UserModel extends Model<
 					type: DataTypes.STRING,
 					allowNull: false,
 					field: "password_hash",
+				},
+				role: {
+					type: DataTypes.STRING,
+					allowNull: false,
+					defaultValue: "user",
 				},
 				isEmailVerified: {
 					type: DataTypes.BOOLEAN,

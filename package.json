@@ -10,6 +10,7 @@
         "migrate": "ts-node src/database/run-migrations.ts up",
         "migrate:down": "ts-node src/database/run-migrations.ts down",
         "migrate:status": "ts-node src/database/run-migrations.ts status",
+        "psql": "docker exec -it backend-db-1 psql -U polewin -d polewindb",
         "test": "jest",
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage"

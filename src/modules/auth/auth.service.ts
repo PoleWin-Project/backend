@@ -49,7 +49,7 @@ export class AuthService {
                         purpose: "verify_email",
                     });
 
-                    const roles = ["user"];
+                    const roles = [user.role ?? "user"];
                     const authUser: AuthUser = { id: user.id, roles };
                     const accessToken  = signAccessToken(authUser);
                     const refreshToken = signRefreshToken(authUser);
@@ -103,7 +103,7 @@ export class AuthService {
 
         await user.update({ lastLoginAt: new Date() });
 
-        const roles = ["user"];
+        const roles = [user.role ?? "user"];
         const authUser: AuthUser = { id: user.id, roles };
         const accessToken  = signAccessToken(authUser);
         const refreshToken = signRefreshToken(authUser);
@@ -131,7 +131,7 @@ export class AuthService {
             return { ok: false as const, error: "User not found" };
         }
 
-        const roles = ["user"];
+        const roles = [user.role ?? "user"];
         const authUser: AuthUser = { id: user.id, roles };
         const newAccessToken  = signAccessToken(authUser);
         const newRefreshToken = signRefreshToken(authUser);
