@@ -10,7 +10,7 @@ import {
 	HasManyGetAssociationsMixin,
 } from "sequelize";
 import type { RaceSessionModel } from "./raceSession.model";
-import type { MessageModel } from "./message.model";
+import type { ChannelMessageModel } from "./channelMessage.model";
 
 export class ChatChannelModel extends Model<
 	InferAttributes<ChatChannelModel>,
@@ -21,14 +21,14 @@ export class ChatChannelModel extends Model<
 	declare sessionId: number;
 
 	declare getSession: BelongsToGetAssociationMixin<RaceSessionModel>;
-	declare getMessages: HasManyGetAssociationsMixin<MessageModel>;
+	declare getMessages: HasManyGetAssociationsMixin<ChannelMessageModel>;
 
 	declare session?: RaceSessionModel;
-	declare messages?: MessageModel[];
+	declare messages?: ChannelMessageModel[];
 
 	declare static associations: {
 		session: Association<ChatChannelModel, RaceSessionModel>;
-		messages: Association<ChatChannelModel, MessageModel>;
+		messages: Association<ChatChannelModel, ChannelMessageModel>;
 	};
 
 	static initModel(sequelize: Sequelize) {
@@ -43,6 +43,9 @@ export class ChatChannelModel extends Model<
 				tableName: "chat_channels",
 				timestamps: false,
 				underscored: true,
+				indexes: [
+					{ unique: true, fields: ["session_id"], name: "chat_channels_session_id_unique" },
+				],
 			}
 		);
 

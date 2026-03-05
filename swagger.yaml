@@ -31,6 +31,13 @@ tags:
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 
+    - name: Race Sessions
+      description: Calendrier des sessions de course
+    - name: Chat Channels
+      description: Canaux de discussion lies a une race session
+    - name: Messages
+      description: Messages d'un canal de chat
+
 paths:
 
     # ── Health ────────────────────────────────────────────────────────────────
@@ -1132,6 +1139,326 @@ paths:
 
 # ─── Components ───────────────────────────────────────────────────────────────
 
+    /api/v1/race-sessions:
+        get:
+            tags: [Race Sessions]
+            summary: Lister les race sessions
+            parameters:
+                - in: query
+                  name: q
+                  schema: { type: string }
+                - in: query
+                  name: type
+                  schema: { type: string }
+                - in: query
+                  name: limit
+                  schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
+                - in: query
+                  name: offset
+                  schema: { type: integer, default: 0, minimum: 0 }
+            responses:
+                "200":
+                    description: Liste paginee
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/RaceSessionListResponse"
+
+    /api/v1/race-sessions/{id}:
+        get:
+            tags: [Race Sessions]
+            summary: Recuperer une race session
+            parameters:
+                - in: path
+                  name: id
+                  required: true
+                  schema: { type: integer }
+            responses:
+                "200":
+                    description: Race session
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/RaceSessionResponse"
+                "404":
+                    description: Introuvable
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/admin/race-sessions:
+        post:
+            tags: [Race Sessions, Admin]
+            summary: Creer une race session
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/CreateRaceSessionRequest"
+            responses:
+                "201":
+                    description: Cree
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/RaceSessionResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+
+    /api/v1/admin/race-sessions/{id}:
+        patch:
+            tags: [Race Sessions, Admin]
+            summary: Modifier une race session
+            security:
+                - bearerAuth: []
+            parameters:
+                - in: path
+                  name: id
+                  required: true
+                  schema: { type: integer }
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/UpdateRaceSessionRequest"
+            responses:
+                "200":
+                    description: Modifie
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/RaceSessionResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+                "404":
+                    description: Introuvable
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+        delete:
+            tags: [Race Sessions, Admin]
+            summary: Supprimer une race session
+            security:
+                - bearerAuth: []
+            parameters:
+                - in: path
+                  name: id
+                  required: true
+                  schema: { type: integer }
+            responses:
+                "200":
+                    description: Supprime
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+
+    /api/v1/admin/race-sessions/import/openf1/latest:
+        post:
+            tags: [Race Sessions, Admin]
+            summary: Importer la session OpenF1 latest
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: Import effectue (mise a jour)
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/RaceSessionImportResponse"
+                "201":
+                    description: Import effectue (creation)
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/RaceSessionImportResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+
+    /api/v1/admin/race-sessions/import/openf1/{sessionKey}:
+        post:
+            tags: [Race Sessions, Admin]
+            summary: Importer une session OpenF1 par session_key
+            security:
+                - bearerAuth: []
+            parameters:
+                - in: path
+                  name: sessionKey
+                  required: true
+                  schema: { type: integer }
+            responses:
+                "200":
+                    description: Import effectue (mise a jour)
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/RaceSessionImportResponse"
+                "201":
+                    description: Import effectue (creation)
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/RaceSessionImportResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+
+    /api/v1/race-sessions/{sessionId}/chat-channels:
+        get:
+            tags: [Chat Channels]
+            summary: Lister les canaux de chat d'une race session
+            parameters:
+                - in: path
+                  name: sessionId
+                  required: true
+                  schema: { type: integer }
+                - in: query
+                  name: limit
+                  schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
+                - in: query
+                  name: offset
+                  schema: { type: integer, default: 0, minimum: 0 }
+            responses:
+                "200":
+                    description: Liste paginee
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ChatChannelListResponse"
+    /api/v1/chat-channels/{id}:
+        get:
+            tags: [Chat Channels]
+            summary: Recuperer un canal de chat
+            parameters:
+                - in: path
+                  name: id
+                  required: true
+                  schema: { type: integer }
+            responses:
+                "200":
+                    description: Canal
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ChatChannelResponse"
+                "404":
+                    description: Introuvable
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/chat-channels/{channelId}/channel-messages:
+        get:
+            tags: [Messages]
+            summary: Lister les messages d'un canal
+            parameters:
+                - in: path
+                  name: channelId
+                  required: true
+                  schema: { type: integer }
+                - in: query
+                  name: limit
+                  schema: { type: integer, default: 30, minimum: 1, maximum: 100 }
+                - in: query
+                  name: offset
+                  schema: { type: integer, default: 0, minimum: 0 }
+            responses:
+                "200":
+                    description: Liste paginee
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/MessageListResponse"
+        post:
+            tags: [Messages]
+            summary: Envoyer un message dans un canal
+            security:
+                - bearerAuth: []
+            parameters:
+                - in: path
+                  name: channelId
+                  required: true
+                  schema: { type: integer }
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/CreateMessageRequest"
+            responses:
+                "201":
+                    description: Cree
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/MessageResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+
+    /api/v1/channel-messages/{id}:
+        get:
+            tags: [Messages]
+            summary: Recuperer un message
+            parameters:
+                - in: path
+                  name: id
+                  required: true
+                  schema: { type: integer }
+            responses:
+                "200":
+                    description: Message
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/MessageResponse"
+                "404":
+                    description: Introuvable
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/admin/channel-messages/{id}:
+        delete:
+            tags: [Messages, Admin]
+            summary: Supprimer un message (admin)
+            security:
+                - bearerAuth: []
+            parameters:
+                - in: path
+                  name: id
+                  required: true
+                  schema: { type: integer }
+            responses:
+                "200":
+                    description: Supprime
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+
 components:
     securitySchemes:
         bearerAuth:
@@ -1155,6 +1482,254 @@ components:
                         $ref: "#/components/schemas/ErrorResponse"
 
     schemas:
+
+        RaceSession:
+            type: object
+            properties:
+                id:
+                    type: integer
+                    example: 12
+                idCourseExternal:
+                    type: integer
+                    nullable: true
+                    example: 9158
+                name:
+                    type: string
+                    example: "Monaco Grand Prix"
+                type:
+                    type: string
+                    example: "RACE"
+                dateStart:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    example: "2026-05-24T13:00:00.000Z"
+            required: [id, name, type]
+
+        RaceSessionResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                session:
+                    $ref: "#/components/schemas/RaceSession"
+            required: [status, session]
+
+        RaceSessionListResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                items:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/RaceSession"
+                total:
+                    type: integer
+                    example: 24
+                limit:
+                    type: integer
+                    example: 20
+                offset:
+                    type: integer
+                    example: 0
+                hasMore:
+                    type: boolean
+                    example: true
+            required: [status, items, total, limit, offset, hasMore]
+
+        CreateRaceSessionRequest:
+            type: object
+            required: [name, type]
+            properties:
+                idCourseExternal:
+                    type: integer
+                    nullable: true
+                    minimum: 1
+                    example: 9158
+                name:
+                    type: string
+                    minLength: 1
+                    maxLength: 255
+                    example: "Monaco Grand Prix"
+                type:
+                    type: string
+                    minLength: 1
+                    maxLength: 80
+                    example: "RACE"
+                dateStart:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    example: "2026-05-24T13:00:00.000Z"
+
+        UpdateRaceSessionRequest:
+            type: object
+            properties:
+                idCourseExternal:
+                    type: integer
+                    nullable: true
+                    minimum: 1
+                name:
+                    type: string
+                    minLength: 1
+                    maxLength: 255
+                type:
+                    type: string
+                    minLength: 1
+                    maxLength: 80
+                dateStart:
+                    type: string
+                    format: date-time
+                    nullable: true
+
+        RaceSessionImportResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                created:
+                    type: boolean
+                    example: true
+                session:
+                    $ref: "#/components/schemas/RaceSession"
+            required: [status, created, session]
+
+        ChatChannel:
+            type: object
+            properties:
+                id:
+                    type: integer
+                    example: 5
+                name:
+                    type: string
+                    example: "General"
+                sessionId:
+                    type: integer
+                    example: 12
+            required: [id, name, sessionId]
+
+        ChatChannelResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                channel:
+                    $ref: "#/components/schemas/ChatChannel"
+            required: [status, channel]
+
+        ChatChannelListResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                items:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/ChatChannel"
+                total:
+                    type: integer
+                    example: 3
+                limit:
+                    type: integer
+                    example: 20
+                offset:
+                    type: integer
+                    example: 0
+                hasMore:
+                    type: boolean
+                    example: false
+            required: [status, items, total, limit, offset, hasMore]
+
+        CreateChatChannelRequest:
+            type: object
+            required: [name]
+            properties:
+                name:
+                    type: string
+                    minLength: 1
+                    maxLength: 120
+                    example: "General"
+
+        UpdateChatChannelRequest:
+            type: object
+            required: [name]
+            properties:
+                name:
+                    type: string
+                    minLength: 1
+                    maxLength: 120
+                    example: "General FR"
+
+        Message:
+            type: object
+            properties:
+                id:
+                    type: integer
+                    example: 101
+                senderId:
+                    type: integer
+                    example: 7
+                channelId:
+                    type: integer
+                    example: 5
+                content:
+                    type: string
+                    example: "Safety car in lap 12!"
+                createdAt:
+                    type: string
+                    format: date-time
+                    example: "2026-03-05T09:20:00.000Z"
+            required: [id, senderId, channelId, content, createdAt]
+
+        MessageResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                message:
+                    $ref: "#/components/schemas/Message"
+            required: [status, message]
+
+        MessageListResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                items:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/Message"
+                total:
+                    type: integer
+                    example: 120
+                limit:
+                    type: integer
+                    example: 30
+                offset:
+                    type: integer
+                    example: 0
+                hasMore:
+                    type: boolean
+                    example: true
+            required: [status, items, total, limit, offset, hasMore]
+
+        CreateMessageRequest:
+            type: object
+            required: [content]
+            properties:
+                content:
+                    type: string
+                    minLength: 1
+                    maxLength: 5000
+                    example: "Let's go Ferrari!"
 
         # ── Badges ────────────────────────────────────────────────────────────
 

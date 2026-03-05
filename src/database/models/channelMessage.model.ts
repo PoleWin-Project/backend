@@ -11,9 +11,9 @@ import {
 import type { UserModel } from "./User.model";
 import type { ChatChannelModel } from "./chatChannel.model";
 
-export class MessageModel extends Model<
-	InferAttributes<MessageModel>,
-	InferCreationAttributes<MessageModel>
+export class ChannelMessageModel extends Model<
+	InferAttributes<ChannelMessageModel>,
+	InferCreationAttributes<ChannelMessageModel>
 > {
 	declare id: CreationOptional<number>;
 	declare senderId: number;
@@ -28,12 +28,12 @@ export class MessageModel extends Model<
 	declare channel?: ChatChannelModel;
 
 	declare static associations: {
-		sender: Association<MessageModel, UserModel>;
-		channel: Association<MessageModel, ChatChannelModel>;
+		sender: Association<ChannelMessageModel, UserModel>;
+		channel: Association<ChannelMessageModel, ChatChannelModel>;
 	};
 
 	static initModel(sequelize: Sequelize) {
-		MessageModel.init(
+		ChannelMessageModel.init(
 			{
 				id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
 				senderId: { type: DataTypes.INTEGER, allowNull: false, field: "sender_id" },
@@ -57,6 +57,6 @@ export class MessageModel extends Model<
 			}
 		);
 
-		return MessageModel;
+		return ChannelMessageModel;
 	}
 }

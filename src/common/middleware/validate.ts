@@ -21,7 +21,11 @@ export function validateQuery(schema: ZodSchema) {
             return next(
                 httpErrors.unprocessableEntity(parsed.error.message, "VALIDATION_ERROR")
             );
-        req.query = parsed.data as any;
+        const queryRef = req.query as Record<string, unknown>;
+        for (const key of Object.keys(queryRef)) {
+            delete queryRef[key];
+        }
+        Object.assign(queryRef, parsed.data as Record<string, unknown>);
         next();
     };
 }
