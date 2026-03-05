@@ -1,10 +1,15 @@
 export interface OpenF1Meeting {
     circuit_key:              number;
     circuit_short_name:       string;
+    circuit_type:             string | null;
+    circuit_info_url:         string | null;
+    circuit_image:            string | null;
     country_code:             string;
     country_key:              number;
     country_name:             string;
+    country_flag:             string | null;
     date_start:               string;
+    date_end:                 string | null;
     gmt_offset:               string;
     location:                 string;
     meeting_key:              number;

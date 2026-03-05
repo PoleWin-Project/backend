@@ -75,4 +75,33 @@ export class OpenF1Controller {
             next(e);
         }
     };
+
+    getCalendar = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const year = req.query.year ? Number(req.query.year) : undefined;
+            const meetings = await this.service.getCalendar(year);
+            res.json({ status: "ok", meetings });
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    getUpcomingSessions = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const limit = req.query.limit ? Number(req.query.limit) : 10;
+            const sessions = await this.service.getUpcomingSessions(limit);
+            res.json({ status: "ok", sessions });
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    getNextSession = async (_req: Request, res: Response, next: NextFunction) => {
+        try {
+            const session = await this.service.getNextSession();
+            res.json({ status: "ok", session });
+        } catch (e) {
+            next(e);
+        }
+    };
 }

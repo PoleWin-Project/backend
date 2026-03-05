@@ -22,6 +22,12 @@ tags:
       description: Administration (rôle admin requis)
     - name: Health
       description: Endpoints de diagnostic
+    - name: Sessions
+      description: Race sessions F1 (qualifying, race, sprint…)
+    - name: Predictions
+      description: Questions de pronostic par session — gérées par l'admin
+    - name: Pronostics
+      description: Paris des utilisateurs sur les prédictions (points stakés)
     - name: Badges
       description: Badges utilisateur — catalogue et attribution
     - name: OpenF1
@@ -34,9 +40,9 @@ tags:
     - name: Race Sessions
       description: Calendrier des sessions de course
     - name: Chat Channels
-      description: Canaux de discussion lies a une race session
+      description: Canal live unique par race session
     - name: Messages
-      description: Messages d'un canal de chat
+      description: Messages des canaux de chat
 
 paths:
 
@@ -550,6 +556,486 @@ paths:
                             schema:
                                 $ref: "#/components/schemas/ErrorResponse"
 
+    # ── Sessions ──────────────────────────────────────────────────────────────
+
+    /api/v1/sessions:
+        get:
+            tags: [Sessions]
+            summary: Lister les sessions
+            parameters:
+                - name: type
+                  in: query
+                  required: false
+                  description: "Filtrer par type (Race, Qualifying, Sprint…)"
+                  schema:
+                      type: string
+                      example: Race
+                - name: limit
+                  in: query
+                  schema: { type: integer, default: 20 }
+                - name: offset
+                  in: query
+                  schema: { type: integer, default: 0 }
+            responses:
+                "200":
+                    description: Liste des sessions
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/SessionsListResponse"
+
+    /api/v1/sessions/{sessionId}:
+        get:
+            tags: [Sessions]
+            summary: Détail d'une session
+            parameters:
+                - $ref: "#/components/parameters/SessionId"
+            responses:
+                "200":
+                    description: Session
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/SessionResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/admin/sessions:
+        post:
+            tags: [Sessions]
+            summary: Créer une session (admin)
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/CreateSessionRequest"
+            responses:
+                "201":
+                    description: Session créée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/SessionResponse"
+                "400":
+                    $ref: "#/components/responses/ValidationError"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+
+    /api/v1/admin/sessions/{sessionId}:
+        patch:
+            tags: [Sessions]
+            summary: Modifier une session (admin)
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/SessionId"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/UpdateSessionRequest"
+            responses:
+                "200":
+                    description: Session modifiée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/SessionResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+        delete:
+            tags: [Sessions]
+            summary: Supprimer une session (admin)
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/SessionId"
+            responses:
+                "200":
+                    description: Session supprimée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    # ── Predictions ───────────────────────────────────────────────────────────
+
+    /api/v1/sessions/{sessionId}/predictions:
+        get:
+            tags: [Predictions]
+            summary: Prédictions d'une session
+            description: Retourne toutes les prédictions ouvertes (ou fermées) d'une session.
+            parameters:
+                - $ref: "#/components/parameters/SessionId"
+            responses:
+                "200":
+                    description: Liste des prédictions
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/PredictionsListResponse"
+
+    /api/v1/predictions/{predictionId}:
+        get:
+            tags: [Predictions]
+            summary: Détail d'une prédiction
+            parameters:
+                - $ref: "#/components/parameters/PredictionId"
+            responses:
+                "200":
+                    description: Prédiction
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/PredictionResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/admin/sessions/{sessionId}/predictions:
+        post:
+            tags: [Predictions]
+            summary: Créer une prédiction pour une session (admin)
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/SessionId"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/CreatePredictionRequest"
+                        example:
+                            title: "Qui remporte la course ?"
+                            scope: "race"
+                            closesAt: "2024-09-01T13:00:00Z"
+                            defaultMultiplier: 2.5
+            responses:
+                "201":
+                    description: Prédiction créée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/PredictionResponse"
+                "400":
+                    $ref: "#/components/responses/ValidationError"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+
+    /api/v1/admin/predictions/{predictionId}:
+        patch:
+            tags: [Predictions]
+            summary: Modifier une prédiction (admin)
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/PredictionId"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/UpdatePredictionRequest"
+            responses:
+                "200":
+                    description: Prédiction modifiée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/PredictionResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+        delete:
+            tags: [Predictions]
+            summary: Supprimer une prédiction (admin)
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/PredictionId"
+            responses:
+                "200":
+                    description: Prédiction supprimée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/admin/predictions/{predictionId}/resolve:
+        post:
+            tags: [Predictions]
+            summary: Résoudre une prédiction (admin)
+            description: >
+                Fournit la `winningValue`. Pour chaque pronostic `submitted` :
+
+                - **won** → `pointsEarned = pointsStaked × multiplier`, crédité sur `profile.points`
+
+                - **lost** → `pointsEarned = 0` (mise déjà déduite lors du pari)
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/PredictionId"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/ResolveRequest"
+                        example:
+                            winningValue: "Leclerc"
+            responses:
+                "200":
+                    description: Prédiction résolue
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    resolved:
+                                        type: integer
+                                        description: Nombre de pronostics traités
+                                        example: 42
+                                    winningValue:
+                                        type: string
+                                        example: "Leclerc"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/admin/predictions/{predictionId}/pronostics:
+        get:
+            tags: [Predictions]
+            summary: Voir tous les pronostics d'une prédiction (admin)
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/PredictionId"
+            responses:
+                "200":
+                    description: Liste de tous les pronostics
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/PronosticsListResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+
+    # ── Pronostics (paris user) ───────────────────────────────────────────────
+
+    /api/v1/predictions/{predictionId}/pronostic:
+        get:
+            tags: [Pronostics]
+            summary: Mon pronostic sur cette prédiction
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/PredictionId"
+            responses:
+                "200":
+                    description: Pronostic existant
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/PronosticResponse"
+                "404":
+                    description: Aucun pronostic placé
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+
+        post:
+            tags: [Pronostics]
+            summary: Placer un pari
+            description: >
+                Crée un `pronostic` + `pronostic_detail` pour la prédiction.
+
+                **Débit immédiat** de `pointsStaked` sur `profile.points`.
+                La mise est perdue si la prédiction est perdante.
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/PredictionId"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/PlacePronosticRequest"
+                        example:
+                            value: "Leclerc"
+                            pointsStaked: 100
+            responses:
+                "201":
+                    description: Pari enregistré
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/PronosticResponse"
+                "400":
+                    $ref: "#/components/responses/ValidationError"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "409":
+                    description: Pronostic déjà placé sur cette prédiction
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "422":
+                    description: Prédiction fermée ou points insuffisants
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+        patch:
+            tags: [Pronostics]
+            summary: Modifier mon pari (avant fermeture)
+            description: >
+                Modifie `value` et/ou `pointsStaked`.
+                La différence de mise est débitée ou remboursée sur `profile.points`.
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/PredictionId"
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/UpdatePronosticRequest"
+            responses:
+                "200":
+                    description: Pari modifié
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/PronosticResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+                "422":
+                    description: Prédiction fermée ou points insuffisants
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+        delete:
+            tags: [Pronostics]
+            summary: Annuler mon pari (avant fermeture)
+            description: >
+                Supprime le pronostic et **rembourse** `pointsStaked` sur `profile.points`.
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/PredictionId"
+            responses:
+                "200":
+                    description: Pari annulé et points remboursés
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+                "422":
+                    description: Impossible d'annuler après la fermeture
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/users/me/pronostics:
+        get:
+            tags: [Pronostics]
+            summary: Historique de mes paris
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                      type: string
+                      enum: [draft, submitted, won, lost, void]
+                - name: limit
+                  in: query
+                  schema: { type: integer, default: 20 }
+                - name: offset
+                  in: query
+                  schema: { type: integer, default: 0 }
+            responses:
+                "200":
+                    description: Liste paginée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/MyPronosticsListResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+
+    /api/v1/sessions/{sessionId}/pronostics/me:
+        get:
+            tags: [Pronostics]
+            summary: Mes paris pour une session
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/SessionId"
+            responses:
+                "200":
+                    description: Paris de la session
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/PronosticsListResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+
     # ── Badges ────────────────────────────────────────────────────────────────
 
     /api/v1/users/me/badges:
@@ -838,6 +1324,92 @@ paths:
                                 $ref: "#/components/schemas/ErrorResponse"
 
     # ── OpenF1 REST ───────────────────────────────────────────────────────────
+
+    /api/v1/openf1/calendar:
+        get:
+            tags: [OpenF1]
+            summary: Calendrier F1 d'une année
+            description: Retourne tous les meetings (GP) de l'année spécifiée (défaut = année courante).
+            parameters:
+                - name: year
+                  in: query
+                  required: false
+                  description: "Année du calendrier (ex: 2026)"
+                  schema:
+                      type: integer
+                      example: 2026
+            responses:
+                "200":
+                    description: Liste complète des meetings de l'année
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    meetings:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1Meeting"
+                "502":
+                    description: Erreur de communication avec l'API OpenF1
+
+    /api/v1/openf1/upcoming:
+        get:
+            tags: [OpenF1]
+            summary: Prochaines sessions F1
+            description: Retourne les prochaines sessions dont la date de début est dans le futur, triées par date.
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  description: Nombre maximum de sessions à retourner (défaut 10)
+                  schema:
+                      type: integer
+                      default: 10
+                      example: 5
+            responses:
+                "200":
+                    description: Liste des prochaines sessions
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    sessions:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1Session"
+                "502":
+                    description: Erreur de communication avec l'API OpenF1
+
+    /api/v1/openf1/next-session:
+        get:
+            tags: [OpenF1]
+            summary: Prochaine session F1
+            description: Retourne la toute prochaine session F1 à venir.
+            responses:
+                "200":
+                    description: Prochaine session (null si aucune trouvée)
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    session:
+                                        nullable: true
+                                        allOf:
+                                            - $ref: "#/components/schemas/F1Session"
+                "502":
+                    description: Erreur de communication avec l'API OpenF1
 
     /api/v1/openf1/meetings:
         get:
@@ -1139,326 +1711,6 @@ paths:
 
 # ─── Components ───────────────────────────────────────────────────────────────
 
-    /api/v1/race-sessions:
-        get:
-            tags: [Race Sessions]
-            summary: Lister les race sessions
-            parameters:
-                - in: query
-                  name: q
-                  schema: { type: string }
-                - in: query
-                  name: type
-                  schema: { type: string }
-                - in: query
-                  name: limit
-                  schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
-                - in: query
-                  name: offset
-                  schema: { type: integer, default: 0, minimum: 0 }
-            responses:
-                "200":
-                    description: Liste paginee
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/RaceSessionListResponse"
-
-    /api/v1/race-sessions/{id}:
-        get:
-            tags: [Race Sessions]
-            summary: Recuperer une race session
-            parameters:
-                - in: path
-                  name: id
-                  required: true
-                  schema: { type: integer }
-            responses:
-                "200":
-                    description: Race session
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/RaceSessionResponse"
-                "404":
-                    description: Introuvable
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/ErrorResponse"
-
-    /api/v1/admin/race-sessions:
-        post:
-            tags: [Race Sessions, Admin]
-            summary: Creer une race session
-            security:
-                - bearerAuth: []
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: "#/components/schemas/CreateRaceSessionRequest"
-            responses:
-                "201":
-                    description: Cree
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/RaceSessionResponse"
-                "401":
-                    $ref: "#/components/responses/Unauthorized"
-                "403":
-                    $ref: "#/components/responses/Forbidden"
-
-    /api/v1/admin/race-sessions/{id}:
-        patch:
-            tags: [Race Sessions, Admin]
-            summary: Modifier une race session
-            security:
-                - bearerAuth: []
-            parameters:
-                - in: path
-                  name: id
-                  required: true
-                  schema: { type: integer }
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: "#/components/schemas/UpdateRaceSessionRequest"
-            responses:
-                "200":
-                    description: Modifie
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/RaceSessionResponse"
-                "401":
-                    $ref: "#/components/responses/Unauthorized"
-                "403":
-                    $ref: "#/components/responses/Forbidden"
-                "404":
-                    description: Introuvable
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/ErrorResponse"
-        delete:
-            tags: [Race Sessions, Admin]
-            summary: Supprimer une race session
-            security:
-                - bearerAuth: []
-            parameters:
-                - in: path
-                  name: id
-                  required: true
-                  schema: { type: integer }
-            responses:
-                "200":
-                    description: Supprime
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/StatusOkResponse"
-                "401":
-                    $ref: "#/components/responses/Unauthorized"
-                "403":
-                    $ref: "#/components/responses/Forbidden"
-
-    /api/v1/admin/race-sessions/import/openf1/latest:
-        post:
-            tags: [Race Sessions, Admin]
-            summary: Importer la session OpenF1 latest
-            security:
-                - bearerAuth: []
-            responses:
-                "200":
-                    description: Import effectue (mise a jour)
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/RaceSessionImportResponse"
-                "201":
-                    description: Import effectue (creation)
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/RaceSessionImportResponse"
-                "401":
-                    $ref: "#/components/responses/Unauthorized"
-                "403":
-                    $ref: "#/components/responses/Forbidden"
-
-    /api/v1/admin/race-sessions/import/openf1/{sessionKey}:
-        post:
-            tags: [Race Sessions, Admin]
-            summary: Importer une session OpenF1 par session_key
-            security:
-                - bearerAuth: []
-            parameters:
-                - in: path
-                  name: sessionKey
-                  required: true
-                  schema: { type: integer }
-            responses:
-                "200":
-                    description: Import effectue (mise a jour)
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/RaceSessionImportResponse"
-                "201":
-                    description: Import effectue (creation)
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/RaceSessionImportResponse"
-                "401":
-                    $ref: "#/components/responses/Unauthorized"
-                "403":
-                    $ref: "#/components/responses/Forbidden"
-
-    /api/v1/race-sessions/{sessionId}/chat-channels:
-        get:
-            tags: [Chat Channels]
-            summary: Lister les canaux de chat d'une race session
-            parameters:
-                - in: path
-                  name: sessionId
-                  required: true
-                  schema: { type: integer }
-                - in: query
-                  name: limit
-                  schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
-                - in: query
-                  name: offset
-                  schema: { type: integer, default: 0, minimum: 0 }
-            responses:
-                "200":
-                    description: Liste paginee
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/ChatChannelListResponse"
-    /api/v1/chat-channels/{id}:
-        get:
-            tags: [Chat Channels]
-            summary: Recuperer un canal de chat
-            parameters:
-                - in: path
-                  name: id
-                  required: true
-                  schema: { type: integer }
-            responses:
-                "200":
-                    description: Canal
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/ChatChannelResponse"
-                "404":
-                    description: Introuvable
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/ErrorResponse"
-
-    /api/v1/chat-channels/{channelId}/channel-messages:
-        get:
-            tags: [Messages]
-            summary: Lister les messages d'un canal
-            parameters:
-                - in: path
-                  name: channelId
-                  required: true
-                  schema: { type: integer }
-                - in: query
-                  name: limit
-                  schema: { type: integer, default: 30, minimum: 1, maximum: 100 }
-                - in: query
-                  name: offset
-                  schema: { type: integer, default: 0, minimum: 0 }
-            responses:
-                "200":
-                    description: Liste paginee
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/MessageListResponse"
-        post:
-            tags: [Messages]
-            summary: Envoyer un message dans un canal
-            security:
-                - bearerAuth: []
-            parameters:
-                - in: path
-                  name: channelId
-                  required: true
-                  schema: { type: integer }
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: "#/components/schemas/CreateMessageRequest"
-            responses:
-                "201":
-                    description: Cree
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/MessageResponse"
-                "401":
-                    $ref: "#/components/responses/Unauthorized"
-
-    /api/v1/channel-messages/{id}:
-        get:
-            tags: [Messages]
-            summary: Recuperer un message
-            parameters:
-                - in: path
-                  name: id
-                  required: true
-                  schema: { type: integer }
-            responses:
-                "200":
-                    description: Message
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/MessageResponse"
-                "404":
-                    description: Introuvable
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/ErrorResponse"
-
-    /api/v1/admin/channel-messages/{id}:
-        delete:
-            tags: [Messages, Admin]
-            summary: Supprimer un message (admin)
-            security:
-                - bearerAuth: []
-            parameters:
-                - in: path
-                  name: id
-                  required: true
-                  schema: { type: integer }
-            responses:
-                "200":
-                    description: Supprime
-                    content:
-                        application/json:
-                            schema:
-                                $ref: "#/components/schemas/StatusOkResponse"
-                "401":
-                    $ref: "#/components/responses/Unauthorized"
-                "403":
-                    $ref: "#/components/responses/Forbidden"
-
 components:
     securitySchemes:
         bearerAuth:
@@ -1467,7 +1719,35 @@ components:
             bearerFormat: JWT
             description: "JWT dans l'en-tête Authorization: Bearer <token>"
 
+    parameters:
+        SessionId:
+            name: sessionId
+            in: path
+            required: true
+            schema:
+                type: integer
+                example: 1
+        PredictionId:
+            name: predictionId
+            in: path
+            required: true
+            schema:
+                type: integer
+                example: 5
+
     responses:
+        NotFound:
+            description: Ressource introuvable
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/ErrorResponse"
+        ValidationError:
+            description: Données invalides
+            content:
+                application/json:
+                    schema:
+                        $ref: "#/components/schemas/ErrorResponse"
         Unauthorized:
             description: JWT manquant ou invalide
             content:
@@ -1483,30 +1763,34 @@ components:
 
     schemas:
 
+        # ── Sessions ──────────────────────────────────────────────────────────
+
         RaceSession:
             type: object
             properties:
                 id:
                     type: integer
-                    example: 12
+                    example: 1
+                name:
+                    type: string
+                    example: "Italian Grand Prix — Race"
+                type:
+                    type: string
+                    enum: [Race, Qualifying, Sprint, "Sprint Qualifying", "Practice 1", "Practice 2", "Practice 3"]
+                    example: Race
                 idCourseExternal:
                     type: integer
                     nullable: true
+                    description: Clé session OpenF1
                     example: 9158
-                name:
-                    type: string
-                    example: "Monaco Grand Prix"
-                type:
-                    type: string
-                    example: "RACE"
                 dateStart:
                     type: string
                     format: date-time
                     nullable: true
-                    example: "2026-05-24T13:00:00.000Z"
+                    example: "2024-09-01T13:00:00.000Z"
             required: [id, name, type]
 
-        RaceSessionResponse:
+        SessionResponse:
             type: object
             properties:
                 status:
@@ -1514,9 +1798,8 @@ components:
                     example: ok
                 session:
                     $ref: "#/components/schemas/RaceSession"
-            required: [status, session]
 
-        RaceSessionListResponse:
+        SessionsListResponse:
             type: object
             properties:
                 status:
@@ -1528,176 +1811,209 @@ components:
                         $ref: "#/components/schemas/RaceSession"
                 total:
                     type: integer
-                    example: 24
                 limit:
                     type: integer
-                    example: 20
                 offset:
                     type: integer
-                    example: 0
-                hasMore:
-                    type: boolean
-                    example: true
-            required: [status, items, total, limit, offset, hasMore]
 
-        CreateRaceSessionRequest:
+        CreateSessionRequest:
             type: object
             required: [name, type]
             properties:
+                name:
+                    type: string
+                    maxLength: 200
+                    example: "Italian Grand Prix — Race"
+                type:
+                    type: string
+                    enum: [Race, Qualifying, Sprint, "Sprint Qualifying", "Practice 1", "Practice 2", "Practice 3"]
                 idCourseExternal:
                     type: integer
-                    nullable: true
-                    minimum: 1
                     example: 9158
-                name:
-                    type: string
-                    minLength: 1
-                    maxLength: 255
-                    example: "Monaco Grand Prix"
-                type:
-                    type: string
-                    minLength: 1
-                    maxLength: 80
-                    example: "RACE"
                 dateStart:
                     type: string
                     format: date-time
-                    nullable: true
-                    example: "2026-05-24T13:00:00.000Z"
+                    example: "2024-09-01T13:00:00Z"
 
-        UpdateRaceSessionRequest:
+        UpdateSessionRequest:
             type: object
             properties:
+                name:
+                    type: string
+                    maxLength: 200
+                type:
+                    type: string
+                    enum: [Race, Qualifying, Sprint, "Sprint Qualifying", "Practice 1", "Practice 2", "Practice 3"]
                 idCourseExternal:
                     type: integer
-                    nullable: true
-                    minimum: 1
-                name:
-                    type: string
-                    minLength: 1
-                    maxLength: 255
-                type:
-                    type: string
-                    minLength: 1
-                    maxLength: 80
                 dateStart:
                     type: string
                     format: date-time
-                    nullable: true
 
-        RaceSessionImportResponse:
-            type: object
-            properties:
-                status:
-                    type: string
-                    example: ok
-                created:
-                    type: boolean
-                    example: true
-                session:
-                    $ref: "#/components/schemas/RaceSession"
-            required: [status, created, session]
+        # ── Predictions & Pronostics ───────────────────────────────────────────
 
-        ChatChannel:
+        Prediction:
             type: object
             properties:
                 id:
                     type: integer
                     example: 5
-                name:
-                    type: string
-                    example: "General"
                 sessionId:
                     type: integer
-                    example: 12
-            required: [id, name, sessionId]
-
-        ChatChannelResponse:
-            type: object
-            properties:
-                status:
+                    example: 1
+                title:
                     type: string
-                    example: ok
-                channel:
-                    $ref: "#/components/schemas/ChatChannel"
-            required: [status, channel]
-
-        ChatChannelListResponse:
-            type: object
-            properties:
-                status:
+                    example: "Qui remporte la course ?"
+                scope:
                     type: string
-                    example: ok
-                items:
-                    type: array
-                    items:
-                        $ref: "#/components/schemas/ChatChannel"
-                total:
-                    type: integer
-                    example: 3
-                limit:
-                    type: integer
-                    example: 20
-                offset:
-                    type: integer
-                    example: 0
-                hasMore:
-                    type: boolean
-                    example: false
-            required: [status, items, total, limit, offset, hasMore]
-
-        CreateChatChannelRequest:
-            type: object
-            required: [name]
-            properties:
-                name:
+                    nullable: true
+                    example: "race"
+                closesAt:
                     type: string
-                    minLength: 1
-                    maxLength: 120
-                    example: "General"
-
-        UpdateChatChannelRequest:
-            type: object
-            required: [name]
-            properties:
-                name:
-                    type: string
-                    minLength: 1
-                    maxLength: 120
-                    example: "General FR"
-
-        Message:
-            type: object
-            properties:
-                id:
-                    type: integer
-                    example: 101
-                senderId:
-                    type: integer
-                    example: 7
-                channelId:
-                    type: integer
-                    example: 5
-                content:
-                    type: string
-                    example: "Safety car in lap 12!"
+                    format: date-time
+                    nullable: true
+                    example: "2024-09-01T13:00:00.000Z"
                 createdAt:
                     type: string
                     format: date-time
-                    example: "2026-03-05T09:20:00.000Z"
-            required: [id, senderId, channelId, content, createdAt]
+            required: [id, sessionId, title]
 
-        MessageResponse:
+        PredictionResponse:
             type: object
             properties:
                 status:
                     type: string
                     example: ok
-                message:
-                    $ref: "#/components/schemas/Message"
-            required: [status, message]
+                prediction:
+                    $ref: "#/components/schemas/Prediction"
 
-        MessageListResponse:
+        PredictionsListResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                predictions:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/Prediction"
+
+        CreatePredictionRequest:
+            type: object
+            required: [title]
+            properties:
+                title:
+                    type: string
+                    minLength: 1
+                    maxLength: 255
+                    example: "Qui remporte la course ?"
+                scope:
+                    type: string
+                    nullable: true
+                    maxLength: 100
+                    example: "race"
+                closesAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    example: "2024-09-01T13:00:00Z"
+                defaultMultiplier:
+                    type: number
+                    minimum: 0.01
+                    default: 2
+                    description: Multiplicateur appliqué aux paris gagnants
+                    example: 2.5
+
+        UpdatePredictionRequest:
+            type: object
+            properties:
+                title:
+                    type: string
+                    minLength: 1
+                    maxLength: 255
+                scope:
+                    type: string
+                    nullable: true
+                closesAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+
+        ResolveRequest:
+            type: object
+            required: [winningValue]
+            properties:
+                winningValue:
+                    type: string
+                    minLength: 1
+                    maxLength: 500
+                    example: "Leclerc"
+
+        PronosticDetail:
+            type: object
+            properties:
+                pronosticId:
+                    type: integer
+                    example: 12
+                value:
+                    type: string
+                    description: Valeur prédite par l'utilisateur
+                    example: "Leclerc"
+                multiplier:
+                    type: number
+                    nullable: true
+                    description: Multiplicateur appliqué si gagnant
+                    example: 2.5
+
+        Pronostic:
+            type: object
+            properties:
+                id:
+                    type: integer
+                    example: 12
+                userId:
+                    type: integer
+                    example: 7
+                predictionId:
+                    type: integer
+                    example: 5
+                pointsStaked:
+                    type: integer
+                    description: Points misés (déjà déduits du solde)
+                    example: 100
+                pointsEarned:
+                    type: integer
+                    description: Points gagnés (0 si pas encore résolu ou perdu)
+                    example: 250
+                status:
+                    type: string
+                    enum: [draft, submitted, won, lost, void]
+                    example: submitted
+                detail:
+                    $ref: "#/components/schemas/PronosticDetail"
+            required: [id, userId, predictionId, pointsStaked, pointsEarned, status]
+
+        PronosticResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                pronostic:
+                    $ref: "#/components/schemas/Pronostic"
+
+        PronosticsListResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                pronostics:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/Pronostic"
+
+        MyPronosticsListResponse:
             type: object
             properties:
                 status:
@@ -1706,30 +2022,42 @@ components:
                 items:
                     type: array
                     items:
-                        $ref: "#/components/schemas/Message"
+                        $ref: "#/components/schemas/Pronostic"
                 total:
                     type: integer
-                    example: 120
                 limit:
                     type: integer
-                    example: 30
                 offset:
                     type: integer
-                    example: 0
-                hasMore:
-                    type: boolean
-                    example: true
-            required: [status, items, total, limit, offset, hasMore]
 
-        CreateMessageRequest:
+        PlacePronosticRequest:
             type: object
-            required: [content]
+            required: [value, pointsStaked]
             properties:
-                content:
+                value:
                     type: string
                     minLength: 1
-                    maxLength: 5000
-                    example: "Let's go Ferrari!"
+                    maxLength: 500
+                    description: Valeur prédite (nom du pilote, résultat…)
+                    example: "Leclerc"
+                pointsStaked:
+                    type: integer
+                    minimum: 1
+                    description: Points à miser (déduits immédiatement)
+                    example: 100
+
+        UpdatePronosticRequest:
+            type: object
+            properties:
+                value:
+                    type: string
+                    minLength: 1
+                    maxLength: 500
+                    example: "Verstappen"
+                pointsStaked:
+                    type: integer
+                    minimum: 1
+                    example: 150
 
         # ── Badges ────────────────────────────────────────────────────────────
 
@@ -1923,10 +2251,36 @@ components:
                 date_start:
                     type: string
                     format: date-time
-                    example: "2024-08-29T11:30:00+00:00"
+                    example: "2026-03-08T04:00:00+00:00"
+                date_end:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    example: "2026-03-08T06:00:00+00:00"
+                circuit_type:
+                    type: string
+                    nullable: true
+                    example: "Permanent"
+                circuit_image:
+                    type: string
+                    nullable: true
+                    format: uri
+                    example: "https://media.formula1.com/content/dam/fom-website/..."
+                circuit_info_url:
+                    type: string
+                    nullable: true
+                    format: uri
+                country_flag:
+                    type: string
+                    nullable: true
+                    format: uri
+                    example: "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Flags%2016x9/australia-flag.png"
+                gmt_offset:
+                    type: string
+                    example: "11:00:00"
                 year:
                     type: integer
-                    example: 2024
+                    example: 2026
 
         F1Session:
             type: object

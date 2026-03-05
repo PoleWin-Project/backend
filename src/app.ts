@@ -13,6 +13,8 @@ import badgesRoutes from "./modules/badges/badges.routes";
 import raceSessionsRoutes from "./modules/raceSessions/raceSessions.routes";
 import chatChannelsRoutes from "./modules/chatChannels/chatChannels.routes";
 import channelMessagesRoutes from "./modules/channelMessages/channelMessages.routes";
+import sessionsRoutes from "./modules/sessions/sessions.routes";
+import predictionsRoutes from "./modules/predictions/predictions.routes";
 import { errorHandler } from "./common/middleware/errorHandler";
 import { notFound } from "./common/middleware/notFound";
 import { jwtAuth } from "./common/middleware/jwtAuth";
@@ -67,6 +69,8 @@ export function createApp() {
 	app.use(API_V1, raceSessionsRoutes);
 	app.use(API_V1, chatChannelsRoutes);
 	app.use(API_V1, channelMessagesRoutes);
+	app.use(API_V1, sessionsRoutes);
+	app.use(API_V1, predictionsRoutes);
 
 	app.use(notFound);
 	app.use(errorHandler);

@@ -10,6 +10,8 @@ const EnvSchema = z.object({
     VERIFY_EMAIL_SECRET:    z.string().min(16).optional(),
     REFRESH_TOKEN_SECRET:   z.string().min(16).optional(),
     RESET_PASSWORD_SECRET:  z.string().min(16).optional(),
+    OPENF1_USERNAME:        z.string().optional(),
+    OPENF1_PASSWORD:        z.string().optional(),
 });
 
 const result = EnvSchema.safeParse(process.env);
@@ -32,4 +34,6 @@ export const env = {
     verifyEmailSecret:     result.data.VERIFY_EMAIL_SECRET    ?? result.data.JWT_SECRET,
     refreshTokenSecret:    result.data.REFRESH_TOKEN_SECRET   ?? result.data.JWT_SECRET,
     resetPasswordSecret:   result.data.RESET_PASSWORD_SECRET  ?? result.data.JWT_SECRET,
+    openf1Username:        result.data.OPENF1_USERNAME,
+    openf1Password:        result.data.OPENF1_PASSWORD,
 };
