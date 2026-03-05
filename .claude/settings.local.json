@@ -2,7 +2,19 @@
   "permissions": {
     "allow": [
       "Bash(npx tsc --noEmit)",
-      "Bash(npx jest src/modules/openf1/openf1.service.test.ts src/__tests__/openf1.integration.test.ts --no-coverage)"
+      "Bash(npx jest src/modules/openf1/openf1.service.test.ts src/__tests__/openf1.integration.test.ts --no-coverage)",
+      "Bash(node -e \"console.log\\(require\\(''./node_modules/zod/package.json''\\).version\\)\")",
+      "Bash(curl -s \"https://api.openf1.org/v1/sessions?year=2025\")",
+      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); print\\(json.dumps\\(data[:2], indent=2\\)\\)\")",
+      "Bash(curl -s \"https://api.openf1.org/v1/meetings?year=2025\")",
+      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); print\\(f''Total meetings 2025: {len\\(data\\)}''\\); print\\(json.dumps\\(data[0], indent=2\\)\\)\")",
+      "Bash(node -e \"let d=''''; process.stdin.on\\(''data'',c=>d+=c\\); process.stdin.on\\(''end'',\\(\\)=>{const j=JSON.parse\\(d\\); console.log\\(''Total meetings:'', j.length\\); console.log\\(JSON.stringify\\(j[0], null, 2\\)\\);}\\)\")",
+      "Bash(node -e \"let d=''''; process.stdin.on\\(''data'',c=>d+=c\\); process.stdin.on\\(''end'',\\(\\)=>{const j=JSON.parse\\(d\\); const now=new Date\\(\\).toISOString\\(\\); const upcoming=j.filter\\(s=>s.date_start>now\\); console.log\\(''Total sessions 2025:'', j.length, ''| Upcoming:'', upcoming.length\\); upcoming.slice\\(0,3\\).forEach\\(s=>console.log\\(s.session_name, s.session_type, s.date_start, s.location\\)\\);}\\);\")",
+      "Bash(curl -s \"https://api.openf1.org/v1/sessions?year=2026\")",
+      "Bash(node -e \"let d=''''; process.stdin.on\\(''data'',c=>d+=c\\); process.stdin.on\\(''end'',\\(\\)=>{const j=JSON.parse\\(d\\); console.log\\(''Sessions 2026:'', j.length\\); if\\(j.length\\) console.log\\(JSON.stringify\\(j[0], null, 2\\)\\);}\\);\")",
+      "Bash(curl -s \"https://api.openf1.org/v1/meetings?year=2026\")",
+      "Bash(node -e \"let d=''''; process.stdin.on\\(''data'',c=>d+=c\\); process.stdin.on\\(''end'',\\(\\)=>{const j=JSON.parse\\(d\\); console.log\\(''Meetings 2026:'', j.length\\);}\\);\")",
+      "Bash(node -e \"let d=''''; process.stdin.on\\(''data'',c=>d+=c\\); process.stdin.on\\(''end'',\\(\\)=>{const j=JSON.parse\\(d\\); const now=new Date\\(\\).toISOString\\(\\); const upcoming=j.filter\\(s=>s.date_start>now\\); console.log\\(''Upcoming 2026:'', upcoming.length\\); upcoming.slice\\(0,5\\).forEach\\(s=>console.log\\(s.session_name, ''|'', s.session_type, ''|'', s.date_start, ''|'', s.location\\)\\);}\\);\")"
     ]
   }
 }

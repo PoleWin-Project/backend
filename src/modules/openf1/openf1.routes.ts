@@ -5,6 +5,9 @@ import * as live from "./openf1.live.controller";
 const router = Router();
 const ctrl = new OpenF1Controller();
 
+router.get("/openf1/calendar",                          ctrl.getCalendar);
+router.get("/openf1/upcoming",                          ctrl.getUpcomingSessions);
+router.get("/openf1/next-session",                      ctrl.getNextSession);
 router.get("/openf1/meetings/latest",                   ctrl.getLatestMeeting);
 router.get("/openf1/meetings",                          ctrl.getMeetings);
 router.get("/openf1/sessions/latest",                   ctrl.getLatestSession);
