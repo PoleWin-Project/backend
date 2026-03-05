@@ -5,7 +5,7 @@ export { PredictionModel } from "./prediction.model";
 export { PronosticModel } from "./pronostic.model";
 export { PronosticDetailModel } from "./pronosticDetail.model";
 export { ChatChannelModel } from "./chatChannel.model";
-export { MessageModel } from "./message.model";
+export { ChannelMessageModel } from "./channelMessage.model";
 export { LeagueModel } from "./League.model";
 export { LeagueMemberModel } from "./LeagueMember.model";
 export { BadgeModel } from "./badge.model";

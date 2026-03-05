@@ -11,7 +11,7 @@ import {
 } from "sequelize";
 
 import type { ProfileModel } from "./profile.model";
-import type { MessageModel } from "./message.model";
+import type { ChannelMessageModel } from "./channelMessage.model";
 import type { PronosticModel } from "./pronostic.model";
 import type { LeagueModel } from "./League.model";
 import type { LeagueMemberModel } from "./LeagueMember.model";
@@ -33,7 +33,7 @@ export class UserModel extends Model<
 	declare updatedAt: CreationOptional<Date>;
 
 	declare getProfile: HasOneGetAssociationMixin<ProfileModel>;
-	declare getMessagesSent: HasManyGetAssociationsMixin<MessageModel>;
+	declare getMessagesSent: HasManyGetAssociationsMixin<ChannelMessageModel>;
 	declare getPronostics: HasManyGetAssociationsMixin<PronosticModel>;
 	declare getOwnedLeagues: HasManyGetAssociationsMixin<LeagueModel>;
 	declare getLeagueMemberships: HasManyGetAssociationsMixin<LeagueMemberModel>;
@@ -43,7 +43,7 @@ export class UserModel extends Model<
 
 	declare static associations: {
 		profile: Association<UserModel, ProfileModel>;
-		messagesSent: Association<UserModel, MessageModel>;
+		messagesSent: Association<UserModel, ChannelMessageModel>;
 		pronostics: Association<UserModel, PronosticModel>;
 		ownedLeagues: Association<UserModel, LeagueModel>;
 		leagueMemberships: Association<UserModel, LeagueMemberModel>;

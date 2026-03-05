@@ -37,6 +37,13 @@ tags:
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 
+    - name: Race Sessions
+      description: Calendrier des sessions de course
+    - name: Chat Channels
+      description: Canal live unique par race session
+    - name: Messages
+      description: Messages des canaux de chat
+
 paths:
 
     # ── Health ────────────────────────────────────────────────────────────────

@@ -10,6 +10,9 @@ import authRoutes from "./modules/auth/auth.routes";
 import healthRoutes from "./modules/health/health.routes";
 import openf1Routes from "./modules/openf1/openf1.routes";
 import badgesRoutes from "./modules/badges/badges.routes";
+import raceSessionsRoutes from "./modules/raceSessions/raceSessions.routes";
+import chatChannelsRoutes from "./modules/chatChannels/chatChannels.routes";
+import channelMessagesRoutes from "./modules/channelMessages/channelMessages.routes";
 import sessionsRoutes from "./modules/sessions/sessions.routes";
 import predictionsRoutes from "./modules/predictions/predictions.routes";
 import { errorHandler } from "./common/middleware/errorHandler";
@@ -63,6 +66,9 @@ export function createApp() {
 	app.use(API_V1, authRoutes);
 	app.use(API_V1, openf1Routes);
 	app.use(API_V1, badgesRoutes);
+	app.use(API_V1, raceSessionsRoutes);
+	app.use(API_V1, chatChannelsRoutes);
+	app.use(API_V1, channelMessagesRoutes);
 	app.use(API_V1, sessionsRoutes);
 	app.use(API_V1, predictionsRoutes);
 

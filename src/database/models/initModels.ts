@@ -7,7 +7,7 @@ import { PredictionModel } from "./prediction.model";
 import { PronosticModel } from "./pronostic.model";
 import { PronosticDetailModel } from "./pronosticDetail.model";
 import { ChatChannelModel } from "./chatChannel.model";
-import { MessageModel } from "./message.model";
+import { ChannelMessageModel } from "./channelMessage.model";
 import { LeagueModel } from "./League.model";
 import { LeagueMemberModel } from "./LeagueMember.model";
 import { BadgeModel } from "./badge.model";
@@ -23,7 +23,7 @@ export function initModels(sequelize: Sequelize) {
 	PronosticModel.initModel(sequelize);
 	PronosticDetailModel.initModel(sequelize);
 	ChatChannelModel.initModel(sequelize);
-	MessageModel.initModel(sequelize);
+	ChannelMessageModel.initModel(sequelize);
 	LeagueModel.initModel(sequelize);
 	LeagueMemberModel.initModel(sequelize);
 	BadgeModel.initModel(sequelize);
@@ -48,11 +48,11 @@ export function initModels(sequelize: Sequelize) {
 	PronosticModel.hasOne(PronosticDetailModel, { as: "detail", foreignKey: "pronosticId" });
 	PronosticDetailModel.belongsTo(PronosticModel, { as: "pronostic", foreignKey: "pronosticId" });
 
-	ChatChannelModel.hasMany(MessageModel, { as: "messages", foreignKey: "channelId" });
-	MessageModel.belongsTo(ChatChannelModel, { as: "channel", foreignKey: "channelId" });
+	ChatChannelModel.hasMany(ChannelMessageModel, { as: "messages", foreignKey: "channelId" });
+	ChannelMessageModel.belongsTo(ChatChannelModel, { as: "channel", foreignKey: "channelId" });
 
-	UserModel.hasMany(MessageModel, { as: "messagesSent", foreignKey: "senderId" });
-	MessageModel.belongsTo(UserModel, { as: "sender", foreignKey: "senderId" });
+	UserModel.hasMany(ChannelMessageModel, { as: "messagesSent", foreignKey: "senderId" });
+	ChannelMessageModel.belongsTo(UserModel, { as: "sender", foreignKey: "senderId" });
 
 	UserModel.hasMany(LeagueModel, { as: "ownedLeagues", foreignKey: "ownerUserId" });
 	LeagueModel.belongsTo(UserModel, { as: "owner", foreignKey: "ownerUserId" });
@@ -80,7 +80,7 @@ export function initModels(sequelize: Sequelize) {
 		PronosticModel,
 		PronosticDetailModel,
 		ChatChannelModel,
-		MessageModel,
+		ChannelMessageModel,
 		LeagueModel,
 		LeagueMemberModel,
 		BadgeModel,
