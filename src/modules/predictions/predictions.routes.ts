@@ -2,6 +2,7 @@ import { Router } from "express";
 import { PredictionsController } from "./predictions.controller";
 import { requireAuth, requireRole } from "../../common/security/requireAuth";
 import { validateBody, validateQuery } from "../../common/middleware/validate";
+import { pronosticLimiter } from "../../common/middleware/rateLimiter";
 import {
     CreatePredictionDto,
     ListMyPronosticsDto,
@@ -23,8 +24,8 @@ router.get("/predictions/sessions/:sessionId/predictions",                ctrl.g
 router.get("/predictions/:predictionId",                                  ctrl.getById);
 
 router.get("/predictions/:predictionId/pronostic",           requireAuth, ctrl.myPronostic);
-router.post("/predictions/:predictionId/pronostic",          requireAuth, validateBody(PlacePronosticDto),   ctrl.placePronostic);
-router.patch("/predictions/:predictionId/pronostic",         requireAuth, validateBody(UpdatePronosticDto),  ctrl.updatePronostic);
+router.post("/predictions/:predictionId/pronostic",          requireAuth, pronosticLimiter, validateBody(PlacePronosticDto),  ctrl.placePronostic);
+router.patch("/predictions/:predictionId/pronostic",         requireAuth, pronosticLimiter, validateBody(UpdatePronosticDto), ctrl.updatePronostic);
 router.delete("/predictions/:predictionId/pronostic",        requireAuth, ctrl.cancelPronostic);
 
 // ── Admin ─────────────────────────────────────────────────────────────────────

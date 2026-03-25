@@ -2,6 +2,7 @@ import { httpErrors } from "../../common/errors/http";
 import { ChatChannelModel, UserModel } from "../../database/models";
 import { CreateChannelMessageInput, ListChannelMessagesQuery } from "./channelMessages.dto";
 import { ChannelMessagesRepository } from "./channelMessages.repository";
+import { chatLiveService } from "./channelMessages.live";
 
 export class ChannelMessagesService {
     constructor(private readonly repo = new ChannelMessagesRepository()) {}
@@ -19,12 +20,18 @@ export class ChannelMessagesService {
         if (!channel) throw httpErrors.notFound("Chat channel not found");
 
         const { rows, count } = await this.repo.listByChannel(channelId, query);
+        const hasMore = query.before !== undefined
+            ? rows.length === query.limit
+            : query.offset + rows.length < count;
+
         return {
             items: rows,
             total: count,
             limit: query.limit,
             offset: query.offset,
-            hasMore: query.offset + rows.length < count,
+            hasMore,
+            // cursor for next page (load older messages): id of the oldest message in this batch
+            nextCursor: hasMore && rows.length > 0 ? rows[rows.length - 1].id : null,
         };
     }
 
@@ -37,7 +44,9 @@ export class ChannelMessagesService {
         if (!channel) throw httpErrors.notFound("Chat channel not found");
         if (!user) throw httpErrors.notFound("User not found");
 
-        return this.repo.create(channelId, senderId, input);
+        const message = await this.repo.create(channelId, senderId, input);
+        chatLiveService.publish(channelId, message as any);
+        return message;
     }
 
     async delete(id: number) {

@@ -16,6 +16,15 @@ export class UsersController {
         }
     };
 
+    myStats = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const stats = await this.service.getMyStats(req.user!.id);
+            res.json({ status: "ok", stats });
+        } catch (e) {
+            next(e);
+        }
+    };
+
     updateMe = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const userId = req.user!.id;

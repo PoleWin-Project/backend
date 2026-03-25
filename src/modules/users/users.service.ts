@@ -1,4 +1,6 @@
+import { fn, col, literal } from "sequelize";
 import { httpErrors } from "../../common/errors/http";
+import { PronosticModel } from "../../database/models";
 import { UsersRepository } from "./users.repository";
 import {
     AdminUpdateUserInput,
@@ -44,6 +46,42 @@ export class UsersService {
         const updated = await this.repo.updateMe(userId, input);
         if (!updated) throw httpErrors.notFound("User not found");
         return updated;
+    }
+
+    async getMyStats(userId: number) {
+        const rows = await PronosticModel.findAll({
+            where: { userId },
+            attributes: [
+                "status",
+                [fn("COUNT", col("id")),          "count"],
+                [fn("SUM", col("points_staked")), "staked"],
+                [fn("SUM", col("points_earned")), "earned"],
+            ],
+            group: ["status"],
+            raw: true,
+        }) as any[];
+
+        const byStatus = Object.fromEntries(rows.map((r) => [r.status, r]));
+
+        const won     = Number(byStatus["won"]?.count  ?? 0);
+        const lost    = Number(byStatus["lost"]?.count ?? 0);
+        const pending = (["submitted", "awaiting_verification", "draft"] as const)
+            .reduce((s, st) => s + Number(byStatus[st]?.count ?? 0), 0);
+        const total   = won + lost + pending;
+
+        const totalStaked = rows.reduce((s, r) => s + Number(r.staked ?? 0), 0);
+        const totalEarned = rows.reduce((s, r) => s + Number(r.earned ?? 0), 0);
+
+        return {
+            total,
+            won,
+            lost,
+            pending,
+            winRate: total > 0 ? Math.round((won / (won + lost || 1)) * 100) : 0,
+            totalStaked,
+            totalEarned,
+            netGain: totalEarned - totalStaked,
+        };
     }
 
     async adminUpdateUser(userId: number, input: AdminUpdateUserInput) {

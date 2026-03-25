@@ -7,8 +7,9 @@ import { AdminUpdateUserDto, ListUsersQueryDto, UpdateMeDto } from "./users.dto"
 const router = Router();
 const controller = new UsersController();
 
-router.get("/users/me", requireAuth, controller.me);
-router.patch("/users/me", requireAuth, validateBody(UpdateMeDto), controller.updateMe);
+router.get("/users/me",       requireAuth, controller.me);
+router.get("/users/me/stats", requireAuth, controller.myStats);
+router.patch("/users/me",     requireAuth, validateBody(UpdateMeDto), controller.updateMe);
 
 router.get("/users/:id/public", controller.publicProfile);
 

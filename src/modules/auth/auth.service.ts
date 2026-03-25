@@ -1,5 +1,7 @@
 import { Op, UniqueConstraintError, Transaction } from "sequelize";
 import { sequelize } from "../../database/sequelize";
+import { sendMail } from "../../config/mailer";
+import { verifyEmailTemplate, resetPasswordTemplate } from "../../common/utils/emailTemplates";
 import {
     UserModel,
     ProfileModel,
@@ -53,6 +55,10 @@ export class AuthService {
                     const authUser: AuthUser = { id: user.id, roles };
                     const accessToken  = signAccessToken(authUser);
                     const refreshToken = signRefreshToken(authUser);
+
+                    // Send verification email (non-blocking)
+                    const tpl = verifyEmailTemplate(verifyEmailToken);
+                    void sendMail({ to: user.email, ...tpl });
 
                     return { user, roles, accessToken, refreshToken, verifyEmailToken };
                 },
@@ -168,7 +174,8 @@ export class AuthService {
         }
 
         const token = signVerifyEmailToken({ userId: user.id, purpose: "verify_email" });
-        void token;
+        const tpl = verifyEmailTemplate(token);
+        void sendMail({ to: user.email, ...tpl });
 
         return { ok: true as const };
     }
@@ -197,7 +204,8 @@ export class AuthService {
             purpose: "reset_password",
         });
 
-        void resetToken;
+        const tpl = resetPasswordTemplate(resetToken);
+        void sendMail({ to: user.email, ...tpl });
 
         return { ok: true as const };
     }

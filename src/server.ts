@@ -1,11 +1,18 @@
 import "./types/express";
 
+import * as Sentry from "@sentry/node";
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { logger } from "./config/logger";
 import { connectToDatabase } from "./database/pg.client";
 import { initModels } from "./database/models";
 import { sequelize } from "./database/sequelize";
+import { autoResolveScheduler } from "./modules/predictions/autoresolve.scheduler";
+
+if (env.sentryDsn) {
+    Sentry.init({ dsn: env.sentryDsn, environment: env.nodeEnv });
+    logger.info("Sentry initialized");
+}
 
 async function bootstrap() {
     await connectToDatabase();
@@ -17,12 +24,15 @@ async function bootstrap() {
 
     const app = createApp();
 
+    autoResolveScheduler.start();
+
     const server = app.listen(env.port, () => {
         logger.info(`Server listening on http://localhost:${env.port}`);
     });
 
     const shutdown = async (signal: string) => {
         logger.info(`${signal} received — graceful shutdown starting`);
+        autoResolveScheduler.stop();
         server.close(async () => {
             try {
                 await sequelize.close();

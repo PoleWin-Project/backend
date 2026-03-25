@@ -1,17 +1,42 @@
 import "dotenv/config";
 import { z } from "zod";
 
+const isProd = process.env.NODE_ENV === "production";
+
 const EnvSchema = z.object({
     PORT:                   z.coerce.number().int().positive().default(8000),
     DATABASE_URL:           z.string().min(1, "DATABASE_URL is required"),
     CORS_ORIGIN:            z.string().default("http://localhost:3000"),
     NODE_ENV:               z.enum(["development", "test", "production"]).default("development"),
-    JWT_SECRET:             z.string().min(16, "JWT_SECRET must be at least 16 characters"),
-    VERIFY_EMAIL_SECRET:    z.string().min(16).optional(),
-    REFRESH_TOKEN_SECRET:   z.string().min(16).optional(),
-    RESET_PASSWORD_SECRET:  z.string().min(16).optional(),
+
+    // JWT — secrets must be distinct in production
+    JWT_SECRET:             z.string().min(32, "JWT_SECRET must be at least 32 characters"),
+    VERIFY_EMAIL_SECRET:    isProd
+                                ? z.string().min(32, "VERIFY_EMAIL_SECRET required in production")
+                                : z.string().min(16).optional(),
+    REFRESH_TOKEN_SECRET:   isProd
+                                ? z.string().min(32, "REFRESH_TOKEN_SECRET required in production")
+                                : z.string().min(16).optional(),
+    RESET_PASSWORD_SECRET:  isProd
+                                ? z.string().min(32, "RESET_PASSWORD_SECRET required in production")
+                                : z.string().min(16).optional(),
+
+    // OpenF1
     OPENF1_USERNAME:        z.string().optional(),
     OPENF1_PASSWORD:        z.string().optional(),
+
+    // Sentry
+    SENTRY_DSN:             z.string().url().optional(),
+
+    // SMTP (Nodemailer)
+    SMTP_HOST:              z.string().optional(),
+    SMTP_PORT:              z.coerce.number().int().positive().default(587),
+    SMTP_USER:              z.string().optional(),
+    SMTP_PASS:              z.string().optional(),
+    SMTP_FROM:              z.string().default("PoleWin <no-reply@polewin.app>"),
+
+    // App
+    APP_URL:                z.string().url().default("http://localhost:3000"),
 });
 
 const result = EnvSchema.safeParse(process.env);
@@ -25,15 +50,26 @@ if (!result.success) {
     process.exit(1);
 }
 
+const d = result.data;
+
 export const env = {
-    port:                  result.data.PORT,
-    databaseUrl:           result.data.DATABASE_URL,
-    corsOrigin:            result.data.CORS_ORIGIN,
-    nodeEnv:               result.data.NODE_ENV,
-    jwtSecret:             result.data.JWT_SECRET,
-    verifyEmailSecret:     result.data.VERIFY_EMAIL_SECRET    ?? result.data.JWT_SECRET,
-    refreshTokenSecret:    result.data.REFRESH_TOKEN_SECRET   ?? result.data.JWT_SECRET,
-    resetPasswordSecret:   result.data.RESET_PASSWORD_SECRET  ?? result.data.JWT_SECRET,
-    openf1Username:        result.data.OPENF1_USERNAME,
-    openf1Password:        result.data.OPENF1_PASSWORD,
+    port:                  d.PORT,
+    databaseUrl:           d.DATABASE_URL,
+    corsOrigin:            d.CORS_ORIGIN,
+    nodeEnv:               d.NODE_ENV,
+    jwtSecret:             d.JWT_SECRET,
+    verifyEmailSecret:     d.VERIFY_EMAIL_SECRET   ?? d.JWT_SECRET,
+    refreshTokenSecret:    d.REFRESH_TOKEN_SECRET  ?? d.JWT_SECRET,
+    resetPasswordSecret:   d.RESET_PASSWORD_SECRET ?? d.JWT_SECRET,
+    openf1Username:        d.OPENF1_USERNAME,
+    openf1Password:        d.OPENF1_PASSWORD,
+    sentryDsn:             d.SENTRY_DSN,
+    smtp: {
+        host:              d.SMTP_HOST,
+        port:              d.SMTP_PORT,
+        user:              d.SMTP_USER,
+        pass:              d.SMTP_PASS,
+        from:              d.SMTP_FROM,
+    },
+    appUrl:                d.APP_URL,
 };

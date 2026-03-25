@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import * as Sentry from "@sentry/node";
 import { AppError } from "../errors/AppError";
 import { logger } from "../../config/logger";
 
@@ -15,6 +16,7 @@ export function errorHandler(
             .status(err.statusCode)
             .json({ status: "error", code: err.code, message: err.message });
     }
+    Sentry.captureException(err);
     logger.error({ err }, "Unexpected error");
     return res
         .status(500)

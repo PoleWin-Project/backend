@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import pinoHttp from "pino-http";
 import { env } from "./config/env";
 import { logger } from "./config/logger";
@@ -15,6 +16,7 @@ import chatChannelsRoutes from "./modules/chatChannels/chatChannels.routes";
 import channelMessagesRoutes from "./modules/channelMessages/channelMessages.routes";
 import sessionsRoutes from "./modules/sessions/sessions.routes";
 import predictionsRoutes from "./modules/predictions/predictions.routes";
+import leaderboardRoutes from "./modules/leaderboard/leaderboard.routes";
 import { errorHandler } from "./common/middleware/errorHandler";
 import { notFound } from "./common/middleware/notFound";
 import { jwtAuth } from "./common/middleware/jwtAuth";
@@ -28,6 +30,7 @@ const API_V1 = "/api/v1";
 export function createApp() {
 	const app = express();
 
+	app.use(compression());
 	app.use(helmet({
 		contentSecurityPolicy: {
 			directives: {
@@ -71,6 +74,7 @@ export function createApp() {
 	app.use(API_V1, channelMessagesRoutes);
 	app.use(API_V1, sessionsRoutes);
 	app.use(API_V1, predictionsRoutes);
+	app.use(API_V1, leaderboardRoutes);
 
 	app.use(notFound);
 	app.use(errorHandler);

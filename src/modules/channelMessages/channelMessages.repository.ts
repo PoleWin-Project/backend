@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import { ChannelMessageModel, ChatChannelModel, UserModel } from "../../database/models";
 import { CreateChannelMessageInput, ListChannelMessagesQuery } from "./channelMessages.dto";
 
@@ -20,8 +21,13 @@ export class ChannelMessagesRepository {
     }
 
     listByChannel(channelId: number, query: ListChannelMessagesQuery) {
+        const where: any = { channelId };
+        if (query.before !== undefined) {
+            where.id = { [Op.lt]: query.before };
+        }
+
         return ChannelMessageModel.findAndCountAll({
-            where: { channelId },
+            where,
             include: [
                 {
                     model: UserModel,
@@ -34,7 +40,7 @@ export class ChannelMessagesRepository {
                 ["id", "DESC"],
             ],
             limit: query.limit,
-            offset: query.offset,
+            offset: query.before !== undefined ? 0 : query.offset,
         });
     }
 
