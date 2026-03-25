@@ -1928,6 +1928,44 @@ paths:
                                         items:
                                             $ref: "#/components/schemas/F1TeamRadio"
 
+    /api/v1/openf1/sessions/{sessionKey}/results:
+        get:
+            tags: [OpenF1]
+            summary: Résultats d'une session
+            description: >
+                Retourne le classement final d'une session.
+
+                - **Race / Sprint** : classement par position (dernière position connue par pilote).
+                - **Qualif / EL** : classement par meilleur temps au tour.
+            parameters:
+                - name: sessionKey
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 9158
+            responses:
+                "200":
+                    description: Résultats de la session
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    results:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1SessionResult"
+                "404":
+                    description: Session introuvable
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
     # ── OpenF1 Drivers ────────────────────────────────────────────────────────
 
     /api/v1/openf1/drivers:
@@ -2031,6 +2069,69 @@ paths:
                                         type: array
                                         items:
                                             $ref: "#/components/schemas/F1Team"
+
+    # ── OpenF1 Standings ──────────────────────────────────────────────────────
+
+    /api/v1/openf1/standings/drivers:
+        get:
+            tags: [OpenF1]
+            summary: Classement championnat pilotes
+            description: >
+                Retourne le classement actuel du championnat pilotes via l'endpoint
+                `championship_drivers` d'OpenF1 (session_key=latest).
+                Enrichi avec les données pilotes (nom, équipe, photo).
+            parameters:
+                - name: year
+                  in: query
+                  description: Année (actuellement non utilisé, retourne toujours la saison en cours)
+                  schema:
+                      type: integer
+                      example: 2025
+            responses:
+                "200":
+                    description: Classement pilotes
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    standings:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1DriverStanding"
+
+    /api/v1/openf1/standings/teams:
+        get:
+            tags: [OpenF1]
+            summary: Classement championnat constructeurs
+            description: >
+                Retourne le classement actuel du championnat constructeurs via l'endpoint
+                `championship_teams` d'OpenF1 (session_key=latest).
+            parameters:
+                - name: year
+                  in: query
+                  description: Année (actuellement non utilisé, retourne toujours la saison en cours)
+                  schema:
+                      type: integer
+                      example: 2025
+            responses:
+                "200":
+                    description: Classement constructeurs
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    standings:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/F1TeamStanding"
 
     # ── OpenF1 Live (SSE) ─────────────────────────────────────────────────────
 
@@ -2969,6 +3070,54 @@ components:
                 session_key:
                     type: integer
                     example: 9158
+
+        F1SessionResult:
+            type: object
+            properties:
+                position:
+                    type: integer
+                    example: 1
+                driver_number:
+                    type: integer
+                    example: 1
+                driver:
+                    $ref: "#/components/schemas/F1Driver"
+                time:
+                    type: number
+                    nullable: true
+                    description: Meilleur temps au tour en secondes (qualifications/EL uniquement)
+                    example: 83.456
+
+        F1DriverStanding:
+            type: object
+            properties:
+                position:
+                    type: integer
+                    example: 1
+                driver_number:
+                    type: integer
+                    example: 1
+                points:
+                    type: number
+                    example: 77
+                driver:
+                    $ref: "#/components/schemas/F1Driver"
+
+        F1TeamStanding:
+            type: object
+            properties:
+                position:
+                    type: integer
+                    example: 1
+                team_name:
+                    type: string
+                    example: "Red Bull Racing"
+                points:
+                    type: number
+                    example: 119
+                team_colour:
+                    type: string
+                    example: "3671C6"
 
         F1Interval:
             type: object
