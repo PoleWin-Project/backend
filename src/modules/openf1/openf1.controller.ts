@@ -141,6 +141,35 @@ export class OpenF1Controller {
         }
     };
 
+    getSessionResults = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const results = await this.service.getSessionResults(Number(req.params.sessionKey));
+            res.json({ status: "ok", results });
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    getDriverStandings = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const year = req.query.year ? Number(req.query.year) : undefined;
+            const standings = await this.service.getDriverStandings(year);
+            res.json({ status: "ok", standings });
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    getTeamStandings = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const year = req.query.year ? Number(req.query.year) : undefined;
+            const standings = await this.service.getTeamStandings(year);
+            res.json({ status: "ok", standings });
+        } catch (e) {
+            next(e);
+        }
+    };
+
     // ── Drivers ───────────────────────────────────────────────────────────────
 
     listDrivers = async (req: Request, res: Response, next: NextFunction) => {

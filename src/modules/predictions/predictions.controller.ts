@@ -114,4 +114,14 @@ export class PredictionsController {
             res.json({ status: "ok", ...result });
         } catch (e) { next(e); }
     };
+
+    sync = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { SyncService } = await import("./sync.service");
+            const syncService = new SyncService();
+            const year = req.body.year || new Date().getFullYear();
+            const result = await syncService.syncSeason(year);
+            res.json({ status: "ok", ...result });
+        } catch (e) { next(e); }
+    };
 }

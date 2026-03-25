@@ -26,6 +26,7 @@ async function getAccessToken(): Promise<string | null> {
             username: env.openf1Username,
             password: env.openf1Password,
         }),
+        signal: AbortSignal.timeout(15_000),
     });
 
     if (!res.ok) {
@@ -56,23 +57,52 @@ function buildUrl(path: string, params?: QueryParams, rawFilters?: string[]): st
     return base;
 }
 
+// ── Response cache (5 min TTL) ────────────────────────────────────────────────
+
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const responseCache = new Map<string, { data: unknown; expiresAt: number }>();
+
+function getCached<T>(key: string): T | null {
+    const entry = responseCache.get(key);
+    if (entry && Date.now() < entry.expiresAt) {
+        return entry.data as T;
+    }
+    if (entry) responseCache.delete(key);
+    return null;
+}
+
+function setCache(key: string, data: unknown): void {
+    responseCache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
 // ── HTTP client ───────────────────────────────────────────────────────────────
 
 async function get<T>(path: string, params?: QueryParams, rawFilters?: string[]): Promise<T> {
     const url     = buildUrl(path, params, rawFilters);
+
+    const cached = getCached<T>(url);
+    if (cached) {
+        logger.debug({ url }, "[OpenF1] Cache hit");
+        return cached;
+    }
+
     const token   = await getAccessToken();
     const headers: Record<string, string> = { Accept: "application/json" };
     if (token) {
         headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const res = await fetch(url, { headers });
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
 
     if (!res.ok) {
         throw new Error(`OpenF1 API error ${res.status}: ${res.statusText} (${url})`);
     }
 
-    return res.json() as Promise<T>;
+    const data = await res.json() as T;
+    setCache(url, data);
+    logger.debug({ url }, "[OpenF1] Cached response");
+    return data;
 }
 
 export const openf1Client = { get };
+

@@ -40,9 +40,10 @@ export class PredictionModel extends Model<
 				id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
 				sessionId: { type: DataTypes.INTEGER, allowNull: false, field: "session_id" },
 				type: {
-				type: DataTypes.ENUM("POLE_POSITION", "RACE_WINNER", "FASTEST_LAP", "PODIUM_FINISH", "DNF", "SAFETY_CAR", "SPRINT_WINNER"),
-				allowNull: false,
-			},
+					type: DataTypes.STRING,
+					allowNull: false,
+					field: "title",
+				},
 				scope: { type: DataTypes.STRING, allowNull: true },
 				closesAt: { type: DataTypes.DATE, allowNull: true, field: "closes_at" },
 				createdAt: {
