@@ -81,20 +81,12 @@ export const TECHS: Tech[] = [
         desc: "Implémentation des JWT (RFC 7519). Permet de créer des tokens signés avec une clé secrète, de les vérifier et de les décoder. Utilisé pour les access tokens (expiration 15 min) et les tokens de vérification email (24h). La clé secrète est validée par Zod au démarrage.",
     },
     {
-        name: "argon2",
-        icon: "🔐",
-        version: "^0.44.0",
-        tags: ["security"],
-        short: "Hachage de mots de passe — standard OWASP",
-        desc: "Argon2 est l'algorithme recommandé par l'OWASP et gagnant de la Password Hashing Competition 2015. Résistant aux attaques GPU et ASIC grâce à sa consommation mémoire configurable. Bien plus sécurisé que MD5, SHA ou bcrypt contre les attaques modernes.",
-    },
-    {
         name: "bcryptjs",
         icon: "🔒",
         version: "^3.0.3",
         tags: ["security"],
-        short: "Hachage bcrypt en pur JavaScript",
-        desc: "Implémentation pure JavaScript de bcrypt, sans dépendances natives compilées. Présent pour compatibilité ou fallback sur les environnements où argon2 ne peut pas compiler. bcrypt reste solide mais moins résistant aux attaques GPU modernes qu'argon2id.",
+        short: "Hachage de mots de passe en pur JavaScript",
+        desc: "Implémentation pure JavaScript de bcrypt sans dépendances natives compilées — fonctionne sur tous les environnements. Utilisé pour hasher et vérifier les mots de passe utilisateurs avec un salt de coût 12.",
     },
     {
         name: "zod",

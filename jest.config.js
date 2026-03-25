@@ -5,4 +5,5 @@ module.exports = {
     testMatch: ["**/*.test.ts"],
     clearMocks: true,
     setupFiles: ["<rootDir>/src/__tests__/setup.js"],
+    forceExit: true,
 };

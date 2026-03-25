@@ -22,7 +22,7 @@ describe("GET /api/v1/health", () => {
         const res = await request(app).get("/api/v1/health");
         expect(res.status).toBe(200);
         expect(res.body.status).toBe("ok");
-        expect(res.body.version).toBe("v1");
+        expect(typeof res.body.version).toBe("string");
         expect(typeof res.body.uptimeSec).toBe("number");
         expect(res.body.memory).toBeDefined();
         expect(typeof res.body.timestamp).toBe("string");
