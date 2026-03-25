@@ -7,7 +7,7 @@ import {
 } from "./users.dto";
 
 export class UsersService {
-    constructor(private readonly repo = new UsersRepository()) {}
+    constructor(private readonly repo = new UsersRepository()) { }
 
     async getMe(userId: number) {
         const user = await this.repo.findById(userId);
