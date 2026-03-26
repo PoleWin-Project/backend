@@ -19,6 +19,7 @@ export class RaceSessionModel extends Model<
 	declare idCourseExternal: number | null;
 	declare name: string;
 	declare type: string;
+	declare location: string | null;
 	declare dateStart: Date | null;
 
 	declare getPredictions: HasManyGetAssociationsMixin<PredictionModel>;
@@ -39,6 +40,7 @@ export class RaceSessionModel extends Model<
 				idCourseExternal: { type: DataTypes.INTEGER, allowNull: true, field: "id_course_external" },
 				name: { type: DataTypes.STRING, allowNull: false },
 				type: { type: DataTypes.STRING, allowNull: false },
+				location: { type: DataTypes.STRING, allowNull: true, field: "location" },
 				dateStart: { type: DataTypes.DATE, allowNull: true, field: "date_start" },
 			},
 			{
