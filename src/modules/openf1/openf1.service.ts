@@ -162,10 +162,14 @@ export class OpenF1Service {
                     driver_number: num,
                     position: Number(s.position),
                     points: Number(s.points),
-                    driver: driversMap.get(num) || {
+                    wins: Number(s.wins),
+                    driver: {
+                        ...(driversMap.get(num) || {}),
                         full_name: `${s.Driver.givenName} ${s.Driver.familyName}`,
                         name_acronym: s.Driver.code,
-                        team_name: s.Constructors[0]?.name
+                        team_name: s.Constructors[0]?.name,
+                        nationality: s.Driver.nationality,
+                        driver_id: s.Driver.driverId
                     },
                 };
             });
@@ -200,10 +204,13 @@ export class OpenF1Service {
                 );
                 
                 return {
-                    team_name: teamName,
                     position: Number(s.position),
                     points: Number(s.points),
-                    team_colour: openf1Team?.team_colour || "ffffff",
+                    wins: Number(s.wins),
+                    team_name: teamName,
+                    team_id: s.Constructor.constructorId,
+                    nationality: s.Constructor.nationality,
+                    team_colour: openf1Team?.team_colour,
                 };
             });
         } catch (e) {
