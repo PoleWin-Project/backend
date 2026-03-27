@@ -47,6 +47,11 @@ export class OpenF1Controller {
 
     getSession = async (req: Request, res: Response, next: NextFunction) => {
         try {
+            if (req.params.sessionKey === "latest") {
+                const session = await this.service.getLatestSession();
+                res.json({ status: "ok", session });
+                return;
+            }
             const session = await this.service.getSessionByKey(Number(req.params.sessionKey));
             if (!session) {
                 res.status(404).json({ status: "error", message: "Session not found" });
@@ -60,7 +65,8 @@ export class OpenF1Controller {
 
     getDrivers = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const drivers = await this.service.getDrivers(Number(req.params.sessionKey));
+            const sk = req.params.sessionKey === "latest" ? "latest" : Number(req.params.sessionKey);
+            const drivers = await this.service.getDrivers(sk);
             res.json({ status: "ok", drivers });
         } catch (e) {
             next(e);
@@ -201,7 +207,8 @@ export class OpenF1Controller {
 
     getSessionTeams = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const teams = await this.service.getTeamsForSession(Number(req.params.sessionKey));
+            const sk = req.params.sessionKey === "latest" ? "latest" : Number(req.params.sessionKey);
+            const teams = await this.service.getTeamsForSession(sk);
             res.json({ status: "ok", teams });
         } catch (e) {
             next(e);

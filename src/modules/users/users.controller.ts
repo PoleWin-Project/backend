@@ -64,4 +64,13 @@ export class UsersController {
             next(e);
         }
     };
+
+    deleteMe = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            await this.service.deleteMe(req.user!.id);
+            res.json({ status: "ok", message: "User deleted" });
+        } catch (e) {
+            next(e);
+        }
+    };
 }

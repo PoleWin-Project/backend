@@ -89,4 +89,9 @@ export class UsersService {
         if (!updated) throw httpErrors.notFound("User not found");
         return updated;
     }
+    async deleteMe(userId: number) {
+        const deleted = await this.repo.delete(userId);
+        if (!deleted) throw httpErrors.notFound("User not found");
+        return true;
+    }
 }

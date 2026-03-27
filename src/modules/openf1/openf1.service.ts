@@ -28,7 +28,7 @@ export class OpenF1Service {
         return results[0] ?? null;
     }
 
-    async getDrivers(sessionKey: number): Promise<OpenF1Driver[]> {
+    async getDrivers(sessionKey: number | "latest"): Promise<OpenF1Driver[]> {
         return openf1Client.get<OpenF1Driver[]>("/drivers", { session_key: sessionKey });
     }
 
@@ -139,32 +139,77 @@ export class OpenF1Service {
 
     // ── Standings ─────────────────────────────────────────────────────────────
 
-    async getDriverStandings(_year?: number): Promise<any[]> {
-        const standings = await openf1Client.get<any[]>("/championship_drivers", { session_key: "latest" });
-        if (!standings || standings.length === 0) return [];
+    async getDriverStandings(year?: number): Promise<any[]> {
+        try {
+            const y = year ?? "current";
+            const url = `https://api.jolpi.ca/ergast/f1/${y}/driverStandings.json`;
+            const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+            if (!res.ok) throw new Error(`Ergast API error: ${res.status}`);
+            const data = await res.json();
+            
+            const standings = data.MRData.StandingsTable.StandingsLists[0]?.DriverStandings || [];
+            
+            const latestSession = await this.getLatestSession();
+            let driversMap = new Map();
+            if (latestSession) {
+                const drivers = await this.getDrivers(latestSession.session_key);
+                driversMap = new Map(drivers.map(d => [d.driver_number, d]));
+            }
 
-        const latestSessionKey = standings[0].session_key;
-        const drivers = await this.getDrivers(latestSessionKey);
-        const driversMap = new Map(drivers.map(d => [d.driver_number, d]));
-
-        return standings.map(s => ({
-            driver_number: s.driver_number,
-            position: s.position_current,
-            points: s.points_current,
-            driver: driversMap.get(s.driver_number),
-        })).sort((a, b) => a.position - b.position);
+            return standings.map((s: any) => {
+                const num = Number(s.Driver.permanentNumber);
+                return {
+                    driver_number: num,
+                    position: Number(s.position),
+                    points: Number(s.points),
+                    driver: driversMap.get(num) || {
+                        full_name: `${s.Driver.givenName} ${s.Driver.familyName}`,
+                        name_acronym: s.Driver.code,
+                        team_name: s.Constructors[0]?.name
+                    },
+                };
+            });
+        } catch (e) {
+            console.error("[OpenF1Service] Failed to fetch driver standings:", e);
+            return [];
+        }
     }
 
-    async getTeamStandings(_year?: number): Promise<any[]> {
-        const standings = await openf1Client.get<any[]>("/championship_teams", { session_key: "latest" });
-        if (!standings) return [];
+    async getTeamStandings(year?: number): Promise<any[]> {
+        try {
+            const y = year ?? "current";
+            const url = `https://api.jolpi.ca/ergast/f1/${y}/constructorStandings.json`;
+            const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+            if (!res.ok) throw new Error(`Ergast API error: ${res.status}`);
+            const data = await res.json();
 
-        return standings.map(s => ({
-            team_name: s.team_name,
-            position: s.position_current,
-            points: s.points_current,
-            team_colour: s.team_colour,
-        })).sort((a, b) => a.position - b.position);
+            const standings = data.MRData.StandingsTable.StandingsLists[0]?.ConstructorStandings || [];
+
+            const latestSession = await this.getLatestSession();
+            let teamsMap = new Map();
+            if (latestSession) {
+                const teams = await this.getTeamsForSession(latestSession.session_key);
+                teamsMap = new Map(teams.map(t => [t.team_name.toLowerCase(), t]));
+            }
+
+            return standings.map((s: any) => {
+                const teamName = s.Constructor.name;
+                const openf1Team = Array.from(teamsMap.values()).find(t => 
+                    t.team_name.toLowerCase().includes(teamName.toLowerCase()) || 
+                    teamName.toLowerCase().includes(t.team_name.toLowerCase())
+                );
+                
+                return {
+                    team_name: teamName,
+                    position: Number(s.position),
+                    points: Number(s.points),
+                    team_colour: openf1Team?.team_colour || "ffffff",
+                };
+            });
+        } catch (e) {
+            console.error("[OpenF1Service] Failed to fetch team standings:", e);
+            return [];
+        }
     }
 
     // ── Drivers ───────────────────────────────────────────────────────────────
@@ -198,7 +243,7 @@ export class OpenF1Service {
         return Array.from(map.values()).sort((a, b) => a.team_name.localeCompare(b.team_name));
     }
 
-    async getTeamsForSession(sessionKey: number): Promise<OpenF1Team[]> {
+    async getTeamsForSession(sessionKey: number | "latest"): Promise<OpenF1Team[]> {
         const drivers = await this.getDrivers(sessionKey);
         return this.driversToTeams(drivers);
     }

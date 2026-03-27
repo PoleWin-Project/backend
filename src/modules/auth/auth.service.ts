@@ -75,6 +75,10 @@ export class AuthService {
                     username: created.user.username,
                     roles:    created.roles,
                     points:   500, // New user starts with 500
+                    profile: {
+                        favoriteTeamCode: null,
+                        favoriteDriverCode: null,
+                    }
                 },
             };
         } catch (e: any) {
@@ -127,6 +131,10 @@ export class AuthService {
                 isEmailVerified: user.isEmailVerified,
                 roles,
                 points:          user.profile?.points ?? 0,
+                profile: {
+                    favoriteTeamCode: user.profile?.favoriteTeamCode ?? null,
+                    favoriteDriverCode: user.profile?.favoriteDriverCode ?? null,
+                }
             },
         };
     }
@@ -262,6 +270,10 @@ export class AuthService {
                 username: user.username,
                 roles:    [user.role ?? "user"],
                 points:   user.profile?.points ?? 0,
+                profile: {
+                    favoriteTeamCode: user.profile?.favoriteTeamCode ?? null,
+                    favoriteDriverCode: user.profile?.favoriteDriverCode ?? null,
+                }
             },
         };
     }

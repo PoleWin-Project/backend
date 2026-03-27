@@ -123,4 +123,10 @@ export class UsersRepository {
         const count = await UserModel.count({ where });
         return count > 0;
     }
+    async delete(userId: number) {
+        return sequelize.transaction(async (tx) => {
+            await ProfileModel.destroy({ where: { userId }, transaction: tx });
+            return UserModel.destroy({ where: { id: userId }, transaction: tx });
+        });
+    }
 }
