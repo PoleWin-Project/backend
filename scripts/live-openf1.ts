@@ -11,7 +11,7 @@ import "dotenv/config";
 
 const BASE_URL  = "https://api.openf1.org/v1";
 const TOKEN_URL = "https://api.openf1.org/token";
-const SESSION_KEY = "11241";
+const SESSION_KEY = "11253";
 
 const USERNAME = process.env.OPENF1_USERNAME;
 const PASSWORD = process.env.OPENF1_PASSWORD;
@@ -190,7 +190,7 @@ function render() {
     const now = new Date().toLocaleTimeString("fr-FR");
     console.log("\x1b[1m\x1b[31m");
     console.log("  ╔══════════════════════════════════════════════════════════╗");
-    console.log("  ║     🏎️  LIVE F1 — China Grand Prix — Qualifying        ║");
+    console.log("  ║     🏎️  LIVE F1 — Japanese Grand Prix — Race             ║");
     console.log(`  ║     📡 Session ${SESSION_KEY}    ⏰ ${now}               ║`);
     console.log("  ╚══════════════════════════════════════════════════════════╝");
     console.log("\x1b[0m");
