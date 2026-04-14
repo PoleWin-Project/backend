@@ -1,6 +1,7 @@
 import "./types/express";
 
 import * as Sentry from "@sentry/node";
+import { createServer } from "http";
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { logger } from "./config/logger";
@@ -8,6 +9,7 @@ import { connectToDatabase } from "./database/pg.client";
 import { initModels } from "./database/models";
 import { sequelize } from "./database/sequelize";
 import { autoResolveScheduler } from "./modules/predictions/autoresolve.scheduler";
+import { setupWsServer } from "./socket/ws.handler";
 
 if (env.sentryDsn) {
     Sentry.init({ dsn: env.sentryDsn, environment: env.nodeEnv });
@@ -22,18 +24,23 @@ async function bootstrap() {
     await sequelize.authenticate();
     logger.info("Database connection established");
 
-    const app = createApp();
+    const app        = createApp();
+    const httpServer = createServer(app);
+
+    // Native WebSocket server for real-time DMs
+    setupWsServer(httpServer);
+    logger.info("WebSocket server initialized on /ws");
 
     autoResolveScheduler.start();
 
-    const server = app.listen(env.port, () => {
+    httpServer.listen(env.port, () => {
         logger.info(`Server listening on http://localhost:${env.port}`);
     });
 
     const shutdown = async (signal: string) => {
         logger.info(`${signal} received — graceful shutdown starting`);
         autoResolveScheduler.stop();
-        server.close(async () => {
+        httpServer.close(async () => {
             try {
                 await sequelize.close();
                 logger.info("Database connection closed");

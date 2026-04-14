@@ -84,6 +84,11 @@ export class UsersService {
         };
     }
 
+    async searchUsers(q: string) {
+        if (!q || q.trim().length < 1) return [];
+        return this.repo.searchPublic(q.trim(), 20);
+    }
+
     async adminUpdateUser(userId: number, input: AdminUpdateUserInput) {
         const updated = await this.repo.adminUpdateUser(userId, input);
         if (!updated) throw httpErrors.notFound("User not found");

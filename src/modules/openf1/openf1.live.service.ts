@@ -14,6 +14,7 @@ const POLL_MS = {
     positions:     5_000,
     laps:         10_000,
     intervals:    10_000,
+    locations:     1_000,
 } as const;
 
 export type LiveStream = keyof typeof POLL_MS;
@@ -23,12 +24,14 @@ export interface LiveRaceControlPayload { events:      OpenF1RaceControl[] }
 export interface LivePositionsPayload  { positions:    OpenF1Position[] }
 export interface LiveLapsPayload       { laps:         OpenF1Lap[] }
 export interface LiveIntervalsPayload  { intervals:    OpenF1Interval[] }
+export interface LiveLocationsPayload  { locations:    any[] }
 
 export type LivePayload<S extends LiveStream> =
     S extends "session"     ? LiveSessionPayload     :
     S extends "raceControl" ? LiveRaceControlPayload :
     S extends "positions"   ? LivePositionsPayload   :
     S extends "laps"        ? LiveLapsPayload        :
+    S extends "locations"   ? LiveLocationsPayload   :
     LiveIntervalsPayload;
 
 export class OpenF1LiveService extends EventEmitter {
@@ -40,6 +43,7 @@ export class OpenF1LiveService extends EventEmitter {
     private lastPositionDate:    string | null = null;
     private lastLapDate:         string | null = null;
     private lastIntervalDate:    string | null = null;
+    private lastLocationDate:    string | null = null;
 
     subscribe(stream: LiveStream): void {
         const count = (this.refCount.get(stream) ?? 0) + 1;
@@ -84,6 +88,7 @@ export class OpenF1LiveService extends EventEmitter {
             case "positions":   return () => void this.pollPositions();
             case "laps":        return () => void this.pollLaps();
             case "intervals":   return () => void this.pollIntervals();
+            case "locations":   return () => void this.pollLocation();
         }
     }
 
@@ -166,6 +171,27 @@ export class OpenF1LiveService extends EventEmitter {
 
             this.publish("intervals", {
                 intervals: [...latest.values()].sort((a, b) => (a.gap_to_leader ?? 0) - (b.gap_to_leader ?? 0)),
+            });
+        } catch { /* ignore poll errors */ }
+    }
+
+    private async pollLocation(): Promise<void> {
+        try {
+            const filters = this.lastLocationDate
+                ? [`date>${this.lastLocationDate}`]
+                : undefined;
+
+            const all = await openf1Client.get<any[]>("/location", { session_key: "latest" }, filters);
+            if (all.length === 0) return;
+
+            this.lastLocationDate = all[all.length - 1].date;
+
+            // Group by driver and take the latest position
+            const latest = new Map<number, any>();
+            for (const p of all) latest.set(p.driver_number, p);
+
+            this.publish("locations", {
+                locations: [...latest.values()],
             });
         } catch { /* ignore poll errors */ }
     }

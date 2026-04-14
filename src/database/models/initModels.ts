@@ -2,6 +2,8 @@ import { Sequelize } from "sequelize";
 
 import { UserModel } from "./User.model";
 import { ProfileModel } from "./profile.model";
+import { FriendRequestModel } from "./friendRequest.model";
+import { DirectMessageModel } from "./directMessage.model";
 import { RaceSessionModel } from "./raceSession.model";
 import { PredictionModel } from "./prediction.model";
 import { PronosticModel } from "./pronostic.model";
@@ -18,6 +20,8 @@ export function initModels(sequelize: Sequelize) {
 
 	UserModel.initModel(sequelize);
 	ProfileModel.initModel(sequelize);
+	FriendRequestModel.initModel(sequelize);
+	DirectMessageModel.initModel(sequelize);
 	RaceSessionModel.initModel(sequelize);
 	PredictionModel.initModel(sequelize);
 	PronosticModel.initModel(sequelize);
@@ -32,6 +36,16 @@ export function initModels(sequelize: Sequelize) {
 
 	UserModel.hasOne(ProfileModel, { as: "profile", foreignKey: "userId" });
 	ProfileModel.belongsTo(UserModel, { as: "user", foreignKey: "userId" });
+
+	UserModel.hasMany(FriendRequestModel, { as: "sentRequests",     foreignKey: "senderId" });
+	UserModel.hasMany(FriendRequestModel, { as: "receivedRequests", foreignKey: "receiverId" });
+	FriendRequestModel.belongsTo(UserModel, { as: "sender",   foreignKey: "senderId" });
+	FriendRequestModel.belongsTo(UserModel, { as: "receiver", foreignKey: "receiverId" });
+
+	UserModel.hasMany(DirectMessageModel, { as: "sentDMs",     foreignKey: "senderId" });
+	UserModel.hasMany(DirectMessageModel, { as: "receivedDMs", foreignKey: "receiverId" });
+	DirectMessageModel.belongsTo(UserModel, { as: "sender",   foreignKey: "senderId" });
+	DirectMessageModel.belongsTo(UserModel, { as: "receiver", foreignKey: "receiverId" });
 
 	RaceSessionModel.hasMany(PredictionModel, { as: "predictions", foreignKey: "sessionId" });
 	PredictionModel.belongsTo(RaceSessionModel, { as: "session", foreignKey: "sessionId" });
@@ -75,6 +89,8 @@ export function initModels(sequelize: Sequelize) {
 	return {
 		UserModel,
 		ProfileModel,
+		FriendRequestModel,
+		DirectMessageModel,
 		RaceSessionModel,
 		PredictionModel,
 		PronosticModel,

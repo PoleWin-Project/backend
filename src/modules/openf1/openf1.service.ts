@@ -84,6 +84,10 @@ export class OpenF1Service {
         return openf1Client.get<OpenF1TeamRadio[]>("/team_radio", { session_key: sessionKey });
     }
 
+    async getLocations(sessionKey: number | "latest"): Promise<any[]> {
+        return openf1Client.get<any[]>("/location", { session_key: sessionKey });
+    }
+
     async getPositions(sessionKey: number): Promise<any[]> {
         return openf1Client.get<any[]>("/position", { session_key: sessionKey });
     }

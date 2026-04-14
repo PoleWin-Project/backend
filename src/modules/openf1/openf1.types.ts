@@ -126,6 +126,16 @@ export interface OpenF1Stint {
     tyre_age_at_start:  number;
 }
 
+export interface OpenF1Location {
+    date:           string;
+    driver_number:  number;
+    meeting_key:    number;
+    session_key:    number;
+    x:              number;
+    y:              number;
+    z:              number;
+}
+
 export interface OpenF1TeamRadio {
     date:           string;
     driver_number:  number;

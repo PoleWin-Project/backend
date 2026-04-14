@@ -55,6 +55,24 @@ export class UsersRepository {
         });
     }
 
+    async searchPublic(q: string, limit = 20) {
+        return UserModel.findAll({
+            where: {
+                username: { [Op.iLike]: `%${q}%` },
+            },
+            include: [
+                {
+                    model: ProfileModel,
+                    as: "profile",
+                    attributes: ["displayName", "avatarUrl", "points", "isProfilePublic"],
+                },
+            ],
+            attributes: ["id", "username"],
+            order: [["username", "ASC"]],
+            limit,
+        });
+    }
+
     async updateMe(userId: number, patch: any) {
         return sequelize.transaction(async (tx) => {
             const user = await UserModel.findByPk(userId, { transaction: tx });

@@ -26,7 +26,9 @@ router.get("/openf1/sessions/:sessionKey/weather",                              
 router.get("/openf1/sessions/:sessionKey/pit",                                  ctrl.getPitStops);
 router.get("/openf1/sessions/:sessionKey/stints",                               ctrl.getStints);
 router.get("/openf1/sessions/:sessionKey/team-radio",                           ctrl.getTeamRadio);
+router.get("/openf1/sessions/:sessionKey/locations",                            ctrl.getLatestLocations);
 router.get("/openf1/sessions/:sessionKey/results",                              ctrl.getSessionResults);
+router.get("/openf1/sessions/:sessionKey/chat-channels",                        ctrl.getSessionChatChannel);
 router.get("/openf1/sessions/:sessionKey",                                      ctrl.getSession);
 router.get("/openf1/sessions",                                                  ctrl.getSessions);
 
@@ -39,5 +41,7 @@ router.get("/openf1/live/race-control",                                         
 router.get("/openf1/live/positions",                                            live.livePositions);
 router.get("/openf1/live/laps",                                                 live.liveLaps);
 router.get("/openf1/live/intervals",                                            live.liveIntervals);
+router.get("/openf1/live/location",                                             live.liveLocation);
+
 
 export default router;

@@ -44,6 +44,16 @@ export class UsersController {
         }
     };
 
+    search = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const q = (req.query.q as string) ?? "";
+            const users = await this.service.searchUsers(q);
+            res.json({ status: "ok", users });
+        } catch (e) {
+            next(e);
+        }
+    };
+
     list = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const data = await this.service.listUsers(req.query as unknown as ListUsersQuery);

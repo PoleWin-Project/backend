@@ -25,6 +25,9 @@ export class ChannelMessagesRepository {
         if (query.before !== undefined) {
             where.id = { [Op.lt]: query.before };
         }
+        if (query.after !== undefined) {
+            where.id = { [Op.gt]: query.after };
+        }
 
         return ChannelMessageModel.findAndCountAll({
             where,
@@ -40,7 +43,7 @@ export class ChannelMessagesRepository {
                 ["id", "DESC"],
             ],
             limit: query.limit,
-            offset: query.before !== undefined ? 0 : query.offset,
+            offset: query.before !== undefined || query.after !== undefined ? 0 : query.offset,
         });
     }
 

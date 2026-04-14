@@ -11,4 +11,6 @@ export { LeagueMemberModel } from "./LeagueMember.model";
 export { BadgeModel } from "./badge.model";
 export { BadgeRuleModel } from "./badgeRule.model";
 export { UserBadgeModel } from "./userBadge.model";
+export { FriendRequestModel } from "./friendRequest.model";
+export { DirectMessageModel } from "./directMessage.model";
 export { initModels } from "./initModels";

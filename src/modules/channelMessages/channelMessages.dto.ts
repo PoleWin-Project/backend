@@ -5,6 +5,8 @@ export const ListChannelMessagesQueryDto = z.object({
     offset: z.coerce.number().int().min(0).default(0),
     // cursor-based: load messages older than this id (for infinite scroll up)
     before: z.coerce.number().int().positive().optional(),
+    // polling: load messages newer than this id
+    after:  z.coerce.number().int().positive().optional(),
 });
 
 export const CreateChannelMessageDto = z.object({

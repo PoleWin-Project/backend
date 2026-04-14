@@ -18,6 +18,8 @@ import sessionsRoutes from "./modules/sessions/sessions.routes";
 import predictionsRoutes from "./modules/predictions/predictions.routes";
 import leaderboardRoutes from "./modules/leaderboard/leaderboard.routes";
 import gamesRoutes from "./modules/games/games.routes";
+import friendsRoutes from "./modules/friends/friends.routes";
+import dmsRoutes from "./modules/dms/dms.routes";
 import { errorHandler } from "./common/middleware/errorHandler";
 import { notFound } from "./common/middleware/notFound";
 import { jwtAuth } from "./common/middleware/jwtAuth";
@@ -77,6 +79,8 @@ export function createApp() {
 	app.use(API_V1, predictionsRoutes);
 	app.use(API_V1, leaderboardRoutes);
 	app.use(`${API_V1}/games`, gamesRoutes);
+	app.use(API_V1, friendsRoutes);
+	app.use(API_V1, dmsRoutes);
 
 	app.use(notFound);
 	app.use(errorHandler);
