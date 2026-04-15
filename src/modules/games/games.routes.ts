@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { GamesController } from "./games.controller";
-import { jwtAuth } from "../../common/middleware/jwtAuth";
+import { requireAuth } from "../../common/security/requireAuth";
 
 const router = Router();
 const controller = new GamesController();
 
-router.post("/reward", jwtAuth, controller.rewardUser);
+router.get("/plays-today", requireAuth, controller.playsToday);
+router.post("/reward",     requireAuth, controller.rewardUser);
 
 export default router;

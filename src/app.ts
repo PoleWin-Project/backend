@@ -65,9 +65,9 @@ export function createApp() {
 
 	app.use(`${API_V1}/docs`, swagger.serve, swagger.setup);
 
-	app.use(API_V1, apiLimiter);
-
 	app.use(API_V1, healthRoutes);
+
+	app.use(API_V1, apiLimiter);
 	app.use(API_V1, usersRoutes);
 	app.use(API_V1, authRoutes);
 	app.use(API_V1, openf1Routes);
