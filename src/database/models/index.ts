@@ -13,4 +13,5 @@ export { BadgeRuleModel } from "./badgeRule.model";
 export { UserBadgeModel } from "./userBadge.model";
 export { FriendRequestModel } from "./friendRequest.model";
 export { DirectMessageModel } from "./directMessage.model";
+export { GamePlayModel } from "./gamePlay.model";
 export { initModels } from "./initModels";
