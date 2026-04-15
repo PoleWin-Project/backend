@@ -1,41 +1,52 @@
-import { Op } from "sequelize";
 import { httpErrors } from "../../common/errors/http";
-import { LeagueModel, LeagueMemberModel, ProfileModel, UserModel } from "../../database/models";
+import { LeaderboardRepository, SessionRankRow } from "./leaderboard.repository";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function encodeCursor(data: object): string {
+    return Buffer.from(JSON.stringify(data)).toString("base64url");
+}
+
+function buildSessionItems(rows: SessionRankRow[], rankOffset: number) {
+    return rows.map((r, i) => ({
+        rank:        rankOffset + i + 1,
+        userId:      r.userId,
+        username:    r.username,
+        displayName: r.displayName,
+        avatarUrl:   r.avatarUrl,
+        netGain:     r.netGain,
+        totalEarned: r.totalEarned,
+        totalStaked: r.totalStaked,
+    }));
+}
+
+// ── Service ───────────────────────────────────────────────────────────────────
 
 export class LeaderboardService {
+    constructor(private readonly repo = new LeaderboardRepository()) {}
+
+    // ── Global ────────────────────────────────────────────────────────────────
 
     async getGlobal(limit: number, afterPoints?: number, afterUserId?: number) {
-        const where: any = {};
+        let rankOffset = 0;
 
         if (afterPoints !== undefined && afterUserId !== undefined) {
-            where[Op.or as any] = [
-                { points: { [Op.lt]: afterPoints } },
-                { points: afterPoints, userId: { [Op.gt]: afterUserId } },
-            ];
+            rankOffset = await this.repo.countGlobalBefore(afterPoints, afterUserId);
         }
 
-        const rows = await ProfileModel.findAll({
-            where,
-            include: [
-                {
-                    model: UserModel,
-                    as: "user",
-                    attributes: ["id", "username"],
-                },
-            ],
-            order: [["points", "DESC"], ["userId", "ASC"]],
-            limit: limit + 1,
-        });
+        const [rows, total] = await Promise.all([
+            this.repo.findGlobalPage(limit + 1, afterPoints, afterUserId),
+            this.repo.countGlobal(),
+        ]);
 
-        const hasMore = rows.length > limit;
-        const items   = hasMore ? rows.slice(0, limit) : rows;
-
-        const nextCursor = hasMore
-            ? Buffer.from(JSON.stringify({ p: items[items.length - 1].points, u: items[items.length - 1].userId })).toString("base64url")
-            : null;
+        const hasMore    = rows.length > limit;
+        const items      = hasMore ? rows.slice(0, limit) : rows;
+        const last       = items[items.length - 1];
+        const nextCursor = hasMore ? encodeCursor({ p: last.points, u: last.userId }) : null;
 
         return {
-            items: items.map((p) => ({
+            items: items.map((p, i) => ({
+                rank:        rankOffset + i + 1,
                 userId:      p.userId,
                 username:    p.user?.username ?? null,
                 displayName: p.displayName,
@@ -43,56 +54,43 @@ export class LeaderboardService {
                 points:      p.points,
             })),
             nextCursor,
+            total,
             limit,
         };
     }
 
+    async getMyRank(userId: number) {
+        const profile = await this.repo.findProfileByUserId(userId);
+        if (!profile) throw httpErrors.notFound("Profile not found");
+
+        const [rank, total] = await Promise.all([
+            this.repo.countProfilesBefore(profile.points, userId),
+            this.repo.countGlobal(),
+        ]);
+
+        return {
+            userId,
+            rank:        rank + 1,
+            points:      profile.points,
+            displayName: profile.displayName,
+            avatarUrl:   profile.avatarUrl,
+            total,
+        };
+    }
+
+    // ── League ────────────────────────────────────────────────────────────────
+
     async getByLeague(leagueId: number, limit: number, afterPoints?: number, afterUserId?: number) {
-        const league = await LeagueModel.findByPk(leagueId, {
-            attributes: ["id", "name", "seasonYear"],
-        });
+        const league = await this.repo.findLeagueById(leagueId);
         if (!league) throw httpErrors.notFound("League not found");
 
-        const memberWhere: any = { leagueId };
-
-        if (afterPoints !== undefined && afterUserId !== undefined) {
-            memberWhere[Op.or as any] = [
-                { "$user.profile.points$": { [Op.lt]: afterPoints } },
-                { "$user.profile.points$": afterPoints, userId: { [Op.gt]: afterUserId } },
-            ];
-        }
-
-        const rows = await LeagueMemberModel.findAll({
-            where: memberWhere,
-            include: [
-                {
-                    model: UserModel,
-                    as: "user",
-                    attributes: ["id", "username"],
-                    include: [
-                        {
-                            model: ProfileModel,
-                            as: "profile",
-                            attributes: ["points", "displayName", "avatarUrl"],
-                        },
-                    ],
-                },
-            ],
-            order: [
-                [{ model: UserModel, as: "user" }, { model: ProfileModel, as: "profile" }, "points", "DESC"],
-                ["userId", "ASC"],
-            ],
-            limit: limit + 1,
-        });
-
+        const rows   = await this.repo.findLeaguePage(leagueId, limit + 1, afterPoints, afterUserId);
         const hasMore = rows.length > limit;
         const items   = hasMore ? rows.slice(0, limit) : rows;
 
-        const lastItem  = items[items.length - 1];
+        const lastItem   = items[items.length - 1];
         const lastPoints = (lastItem?.user as any)?.profile?.points ?? 0;
-        const nextCursor = hasMore
-            ? Buffer.from(JSON.stringify({ p: lastPoints, u: lastItem.userId })).toString("base64url")
-            : null;
+        const nextCursor = hasMore ? encodeCursor({ p: lastPoints, u: lastItem.userId }) : null;
 
         return {
             league: { id: league.id, name: league.name, seasonYear: league.seasonYear },
@@ -105,6 +103,70 @@ export class LeaderboardService {
                 joinedAt:    m.joinedAt,
             })),
             nextCursor,
+            limit,
+        };
+    }
+
+    // ── Session ───────────────────────────────────────────────────────────────
+
+    async getBySession(sessionId: number, limit: number, afterNetGain?: number, afterUserId?: number) {
+        let rankOffset = 0;
+
+        if (afterNetGain !== undefined && afterUserId !== undefined) {
+            rankOffset = await this.repo.countSessionBefore(sessionId, afterNetGain, afterUserId);
+        }
+
+        const [rows, total] = await Promise.all([
+            this.repo.findSessionPage(sessionId, limit + 1, afterNetGain, afterUserId),
+            this.repo.countSessionParticipants(sessionId),
+        ]);
+
+        const hasMore    = rows.length > limit;
+        const items      = hasMore ? rows.slice(0, limit) : rows;
+        const last       = items[items.length - 1];
+        const nextCursor = hasMore ? encodeCursor({ ng: last.netGain, u: last.userId }) : null;
+
+        return {
+            sessionId,
+            items:      buildSessionItems(items, rankOffset),
+            nextCursor,
+            total,
+            limit,
+        };
+    }
+
+    async getBySessionAndLeague(
+        sessionId: number,
+        leagueId: number,
+        limit: number,
+        afterNetGain?: number,
+        afterUserId?: number,
+    ) {
+        const league = await this.repo.findLeagueById(leagueId);
+        if (!league) throw httpErrors.notFound("League not found");
+
+        let rankOffset = 0;
+
+        if (afterNetGain !== undefined && afterUserId !== undefined) {
+            rankOffset = await this.repo.countSessionLeagueBefore(sessionId, leagueId, afterNetGain, afterUserId);
+        }
+
+        const [rows, total] = await Promise.all([
+            this.repo.findSessionLeaguePage(sessionId, leagueId, limit + 1, afterNetGain, afterUserId),
+            this.repo.countSessionLeagueParticipants(sessionId, leagueId),
+        ]);
+
+        const hasMore    = rows.length > limit;
+        const items      = hasMore ? rows.slice(0, limit) : rows;
+        const last       = items[items.length - 1];
+        const nextCursor = hasMore ? encodeCursor({ ng: last.netGain, u: last.userId }) : null;
+
+        return {
+            sessionId,
+            league:     { id: league.id, name: league.name, seasonYear: league.seasonYear },
+            items:      buildSessionItems(items, rankOffset),
+            nextCursor,
+            total,
             limit,
         };
     }

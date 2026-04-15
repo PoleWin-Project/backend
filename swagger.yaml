@@ -43,6 +43,8 @@ tags:
       description: Canal live unique par race session
     - name: Messages
       description: Messages des canaux de chat
+    - name: Leaderboard
+      description: Classements globaux, par league et par session de pronostic
 
 paths:
 
@@ -2226,6 +2228,364 @@ paths:
                                 type: string
                                 example: "event: intervals\ndata: [{\"driver_number\": 1, \"gap_to_leader\": 0, ...}]\n\n"
 
+    # ── Chat Channels ─────────────────────────────────────────────────────────
+
+    /api/v1/race-sessions/{sessionId}/chat-channels:
+        get:
+            tags: [Chat Channels]
+            summary: Lister les canaux de chat d'une session
+            description: Retourne les canaux de discussion associés à une race session (pagination offset).
+            parameters:
+                - $ref: "#/components/parameters/SessionId"
+                - name: limit
+                  in: query
+                  schema:
+                      type: integer
+                      minimum: 1
+                      maximum: 100
+                      default: 20
+                - name: offset
+                  in: query
+                  schema:
+                      type: integer
+                      minimum: 0
+                      default: 0
+            responses:
+                "200":
+                    description: Liste des canaux
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ChatChannelListResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/chat-channels/{id}:
+        get:
+            tags: [Chat Channels]
+            summary: Récupérer un canal par ID
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 1
+            responses:
+                "200":
+                    description: Détail du canal
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ChatChannelResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    # ── Messages ───────────────────────────────────────────────────────────────
+
+    /api/v1/chat-channels/{channelId}/channel-messages:
+        get:
+            tags: [Messages]
+            summary: Lister les messages d'un canal
+            description: >
+                Pagination offset classique. Supports deux modes complémentaires :
+
+                - **`before`** : charge les messages plus anciens que cet ID (scroll infini vers le haut)
+
+                - **`after`** : charge les messages plus récents que cet ID (polling de nouveaux messages)
+            parameters:
+                - name: channelId
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 1
+                - name: limit
+                  in: query
+                  schema:
+                      type: integer
+                      minimum: 1
+                      maximum: 100
+                      default: 30
+                - name: offset
+                  in: query
+                  schema:
+                      type: integer
+                      minimum: 0
+                      default: 0
+                - name: before
+                  in: query
+                  description: Retourne les messages dont l'ID est inférieur à cette valeur
+                  schema:
+                      type: integer
+                      example: 150
+                - name: after
+                  in: query
+                  description: Retourne les messages dont l'ID est supérieur à cette valeur
+                  schema:
+                      type: integer
+                      example: 80
+            responses:
+                "200":
+                    description: Liste des messages
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ChannelMessageListResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+        post:
+            tags: [Messages]
+            summary: Envoyer un message dans un canal
+            description: Crée un message dans le canal. L'utilisateur doit être authentifié. Rate-limited.
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: channelId
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 1
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/CreateChannelMessageRequest"
+                        example:
+                            content: "Super dépassement de Verstappen !"
+            responses:
+                "201":
+                    description: Message créé
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ChannelMessageResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "422":
+                    $ref: "#/components/responses/ValidationError"
+
+    /api/v1/channel-messages/{id}:
+        get:
+            tags: [Messages]
+            summary: Récupérer un message par ID
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 42
+            responses:
+                "200":
+                    description: Détail du message
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ChannelMessageResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/admin/channel-messages/{id}:
+        delete:
+            tags: [Messages, Admin]
+            summary: Supprimer un message (admin)
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 42
+            responses:
+                "204":
+                    description: Message supprimé
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/chat-channels/{channelId}/messages/live:
+        get:
+            tags: [Messages]
+            summary: Stream SSE — messages en temps réel
+            description: >
+                Connexion Server-Sent Events persistante. Chaque nouveau message posté dans le canal
+                est envoyé immédiatement à tous les clients connectés.
+
+                **Event name :** `message`
+
+                Gardez la connexion ouverte tant que l'utilisateur est sur la page du canal.
+            parameters:
+                - name: channelId
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 1
+            responses:
+                "200":
+                    description: Stream SSE établi
+                    content:
+                        text/event-stream:
+                            schema:
+                                type: string
+                                example: "event: message\ndata: {\"id\": 101, \"content\": \"GO VER!\", \"userId\": 5, ...}\n\n"
+
+    # ── Leaderboard ────────────────────────────────────────────────────────────
+
+    /api/v1/leaderboard:
+        get:
+            tags: [Leaderboard]
+            summary: Classement global
+            description: >
+                Retourne tous les utilisateurs triés par solde de points décroissant.
+                Pagination par curseur (base64url). Chaque item inclut son numéro de rang.
+            parameters:
+                - name: limit
+                  in: query
+                  schema:
+                      type: integer
+                      minimum: 1
+                      maximum: 100
+                      default: 50
+                - name: cursor
+                  in: query
+                  description: Curseur opaque retourné par la réponse précédente
+                  schema:
+                      type: string
+                      example: "eyJwIjo5OTgsInUiOjQyfQ"
+            responses:
+                "200":
+                    description: Classement global paginé
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/LeaderboardGlobalResponse"
+
+    /api/v1/leaderboard/me:
+        get:
+            tags: [Leaderboard]
+            summary: Mon rang global
+            description: Retourne le rang, les points et le total de joueurs pour l'utilisateur connecté.
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: Rang de l'utilisateur connecté
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/MyRankResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/leaderboard/leagues/{leagueId}:
+        get:
+            tags: [Leaderboard]
+            summary: Classement d'une league
+            description: Retourne les membres d'une league triés par solde de points décroissant.
+            parameters:
+                - name: leagueId
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 3
+                - name: limit
+                  in: query
+                  schema:
+                      type: integer
+                      minimum: 1
+                      maximum: 100
+                      default: 50
+                - name: cursor
+                  in: query
+                  schema:
+                      type: string
+            responses:
+                "200":
+                    description: Classement de la league
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/LeaderboardLeagueResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/leaderboard/sessions/{sessionId}:
+        get:
+            tags: [Leaderboard]
+            summary: Classement d'une session de pronostic
+            description: >
+                Retourne tous les utilisateurs ayant participé aux pronostics de la session,
+                triés par gain net décroissant (`pointsEarned - pointsStaked`).
+                Seuls les pronostics résolus (`won` ou `lost`) sont comptabilisés.
+            parameters:
+                - $ref: "#/components/parameters/SessionId"
+                - name: limit
+                  in: query
+                  schema:
+                      type: integer
+                      minimum: 1
+                      maximum: 100
+                      default: 50
+                - name: cursor
+                  in: query
+                  schema:
+                      type: string
+            responses:
+                "200":
+                    description: Classement de la session
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/LeaderboardSessionResponse"
+
+    /api/v1/leaderboard/sessions/{sessionId}/leagues/{leagueId}:
+        get:
+            tags: [Leaderboard]
+            summary: Classement d'une session filtré à une league
+            description: >
+                Même logique que le classement de session, mais restreint aux membres
+                d'une league donnée. Idéal pour les challenges entre amis.
+            parameters:
+                - $ref: "#/components/parameters/SessionId"
+                - name: leagueId
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      example: 3
+                - name: limit
+                  in: query
+                  schema:
+                      type: integer
+                      minimum: 1
+                      maximum: 100
+                      default: 50
+                - name: cursor
+                  in: query
+                  schema:
+                      type: string
+            responses:
+                "200":
+                    description: Classement de la session pour la league
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/LeaderboardSessionLeagueResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
 # ─── Components ───────────────────────────────────────────────────────────────
 
 components:
@@ -3571,6 +3931,341 @@ components:
                     type: integer
                     example: 0
             required: [status, items, total, limit, offset]
+
+        # ── Chat Channels ─────────────────────────────────────────────────────
+
+        ChatChannel:
+            type: object
+            properties:
+                id:
+                    type: integer
+                    example: 1
+                sessionId:
+                    type: integer
+                    example: 2
+                name:
+                    type: string
+                    example: "Grand Prix d'Italie — Live"
+                createdAt:
+                    type: string
+                    format: date-time
+            required: [id, sessionId, name]
+
+        ChatChannelResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                channel:
+                    $ref: "#/components/schemas/ChatChannel"
+
+        ChatChannelListResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                items:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/ChatChannel"
+                total:
+                    type: integer
+                    example: 1
+                limit:
+                    type: integer
+                    example: 20
+                offset:
+                    type: integer
+                    example: 0
+
+        # ── Messages ──────────────────────────────────────────────────────────
+
+        ChannelMessage:
+            type: object
+            properties:
+                id:
+                    type: integer
+                    example: 101
+                channelId:
+                    type: integer
+                    example: 1
+                userId:
+                    type: integer
+                    example: 5
+                username:
+                    type: string
+                    example: alexf1
+                avatarUrl:
+                    type: string
+                    nullable: true
+                    format: uri
+                    example: "https://cdn.example.com/avatars/5.jpg"
+                content:
+                    type: string
+                    example: "Super dépassement de Verstappen !"
+                createdAt:
+                    type: string
+                    format: date-time
+            required: [id, channelId, userId, content, createdAt]
+
+        ChannelMessageResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                message:
+                    $ref: "#/components/schemas/ChannelMessage"
+
+        ChannelMessageListResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                items:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/ChannelMessage"
+                total:
+                    type: integer
+                    example: 84
+                limit:
+                    type: integer
+                    example: 30
+                offset:
+                    type: integer
+                    example: 0
+
+        CreateChannelMessageRequest:
+            type: object
+            required: [content]
+            properties:
+                content:
+                    type: string
+                    minLength: 1
+                    maxLength: 5000
+                    example: "GO VER !"
+
+        # ── Leaderboard ───────────────────────────────────────────────────────
+
+        LeaderboardItem:
+            type: object
+            properties:
+                rank:
+                    type: integer
+                    example: 1
+                userId:
+                    type: integer
+                    example: 12
+                username:
+                    type: string
+                    nullable: true
+                    example: alexf1
+                displayName:
+                    type: string
+                    nullable: true
+                    example: Alexandre
+                avatarUrl:
+                    type: string
+                    nullable: true
+                    format: uri
+                points:
+                    type: integer
+                    example: 1540
+            required: [rank, userId, points]
+
+        LeaderboardGlobalResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                items:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/LeaderboardItem"
+                nextCursor:
+                    type: string
+                    nullable: true
+                    example: "eyJwIjoxMzIwLCJ1Ijo3fQ"
+                total:
+                    type: integer
+                    example: 342
+                limit:
+                    type: integer
+                    example: 50
+
+        MyRankResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                userId:
+                    type: integer
+                    example: 42
+                rank:
+                    type: integer
+                    example: 17
+                points:
+                    type: integer
+                    example: 980
+                displayName:
+                    type: string
+                    nullable: true
+                    example: Alexandre
+                avatarUrl:
+                    type: string
+                    nullable: true
+                    format: uri
+                total:
+                    type: integer
+                    example: 342
+
+        LeaderboardLeagueItem:
+            type: object
+            properties:
+                userId:
+                    type: integer
+                    example: 12
+                username:
+                    type: string
+                    nullable: true
+                    example: alexf1
+                displayName:
+                    type: string
+                    nullable: true
+                points:
+                    type: integer
+                    example: 1540
+                avatarUrl:
+                    type: string
+                    nullable: true
+                    format: uri
+                joinedAt:
+                    type: string
+                    format: date-time
+
+        LeaderboardLeagueResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                league:
+                    type: object
+                    properties:
+                        id:
+                            type: integer
+                            example: 3
+                        name:
+                            type: string
+                            example: "Les Amis du GP"
+                        seasonYear:
+                            type: integer
+                            example: 2025
+                items:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/LeaderboardLeagueItem"
+                nextCursor:
+                    type: string
+                    nullable: true
+                limit:
+                    type: integer
+                    example: 50
+
+        SessionLeaderboardItem:
+            type: object
+            properties:
+                rank:
+                    type: integer
+                    example: 1
+                userId:
+                    type: integer
+                    example: 12
+                username:
+                    type: string
+                    example: alexf1
+                displayName:
+                    type: string
+                    nullable: true
+                avatarUrl:
+                    type: string
+                    nullable: true
+                    format: uri
+                netGain:
+                    type: integer
+                    description: "pointsEarned - pointsStaked (peut être négatif)"
+                    example: 320
+                totalEarned:
+                    type: integer
+                    example: 520
+                totalStaked:
+                    type: integer
+                    example: 200
+            required: [rank, userId, netGain, totalEarned, totalStaked]
+
+        LeaderboardSessionResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                sessionId:
+                    type: integer
+                    example: 1
+                items:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/SessionLeaderboardItem"
+                nextCursor:
+                    type: string
+                    nullable: true
+                total:
+                    type: integer
+                    example: 87
+                limit:
+                    type: integer
+                    example: 50
+
+        LeaderboardSessionLeagueResponse:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: ok
+                sessionId:
+                    type: integer
+                    example: 1
+                league:
+                    type: object
+                    properties:
+                        id:
+                            type: integer
+                            example: 3
+                        name:
+                            type: string
+                            example: "Les Amis du GP"
+                        seasonYear:
+                            type: integer
+                            example: 2025
+                items:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/SessionLeaderboardItem"
+                nextCursor:
+                    type: string
+                    nullable: true
+                total:
+                    type: integer
+                    example: 12
+                limit:
+                    type: integer
+                    example: 50
 
         # ── Erreurs ───────────────────────────────────────────────────────────
 
