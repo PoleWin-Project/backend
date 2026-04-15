@@ -1,8 +1,14 @@
 import { Request, Response, NextFunction } from "express";
 import { OpenF1Service } from "./openf1.service";
+import { RaceSessionsRepository } from "../raceSessions/raceSessions.repository";
+import { ChatChannelsService } from "../chatChannels/chatChannels.service";
 
 export class OpenF1Controller {
-    constructor(private readonly service = new OpenF1Service()) {}
+    constructor(
+        private readonly service = new OpenF1Service(),
+        private readonly raceSessionsRepo = new RaceSessionsRepository(),
+        private readonly chatChannelsService = new ChatChannelsService(),
+    ) {}
 
     getMeetings = async (req: Request, res: Response, next: NextFunction) => {
         try {
@@ -47,6 +53,11 @@ export class OpenF1Controller {
 
     getSession = async (req: Request, res: Response, next: NextFunction) => {
         try {
+            if (req.params.sessionKey === "latest") {
+                const session = await this.service.getLatestSession();
+                res.json({ status: "ok", session });
+                return;
+            }
             const session = await this.service.getSessionByKey(Number(req.params.sessionKey));
             if (!session) {
                 res.status(404).json({ status: "error", message: "Session not found" });
@@ -60,7 +71,8 @@ export class OpenF1Controller {
 
     getDrivers = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const drivers = await this.service.getDrivers(Number(req.params.sessionKey));
+            const sk = req.params.sessionKey === "latest" ? "latest" : Number(req.params.sessionKey);
+            const drivers = await this.service.getDrivers(sk);
             res.json({ status: "ok", drivers });
         } catch (e) {
             next(e);
@@ -141,6 +153,16 @@ export class OpenF1Controller {
         }
     };
 
+    getLatestLocations = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const sk = req.params.sessionKey === "latest" ? "latest" : Number(req.params.sessionKey);
+            const locations = await this.service.getLocations(sk);
+            res.json({ status: "ok", locations });
+        } catch (e) {
+            next(e);
+        }
+    };
+
     getSessionResults = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const results = await this.service.getSessionResults(Number(req.params.sessionKey));
@@ -201,7 +223,8 @@ export class OpenF1Controller {
 
     getSessionTeams = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const teams = await this.service.getTeamsForSession(Number(req.params.sessionKey));
+            const sk = req.params.sessionKey === "latest" ? "latest" : Number(req.params.sessionKey);
+            const teams = await this.service.getTeamsForSession(sk);
             res.json({ status: "ok", teams });
         } catch (e) {
             next(e);
@@ -250,6 +273,23 @@ export class OpenF1Controller {
             );
             res.json({ status: "ok", radio });
         } catch (e) { next(e); }
+    };
+
+    // ── Chat channel by OpenF1 session key ───────────────────────────────────
+
+    getSessionChatChannel = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const sessionKey = Number(req.params.sessionKey);
+            const raceSession = await this.raceSessionsRepo.findByExternalId(sessionKey);
+            if (!raceSession) {
+                res.status(404).json({ status: "error", message: "Session not imported yet. No chat channel available." });
+                return;
+            }
+            const channel = await this.chatChannelsService.ensureLiveChannelForSession(raceSession.id, raceSession.name);
+            res.json({ status: "ok", channel });
+        } catch (e) {
+            next(e);
+        }
     };
 
     // ── Sub-routes by team ────────────────────────────────────────────────────

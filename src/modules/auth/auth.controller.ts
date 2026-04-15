@@ -155,4 +155,18 @@ export class AuthController {
             next(e);
         }
     };
+
+    me = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const userId = req.user!.id;
+            const result = await this.authService.me(userId);
+            if (!result.ok)
+                return res
+                    .status(404)
+                    .json({ status: "error", message: result.error });
+            return res.json(result);
+        } catch (e) {
+            next(e);
+        }
+    };
 }

@@ -71,3 +71,9 @@ export const liveIntervals = createSSEHandler(
     "intervals",
     (p) => p.intervals,
 );
+
+export const liveLocation = createSSEHandler(
+    "locations",
+    "locations",
+    (p) => p.locations,
+);

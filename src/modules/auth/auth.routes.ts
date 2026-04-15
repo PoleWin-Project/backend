@@ -16,6 +16,7 @@ import {
 const router = Router();
 const controller = new AuthController();
 
+router.get("/auth/me",             requireAuth, controller.me);
 router.post("/auth/register",       authLimiter, validateBody(RegisterDto),       controller.register);
 router.post("/auth/login",          authLimiter, validateBody(LoginDto),           controller.login);
 router.post("/auth/refresh",                     validateBody(RefreshTokenDto),     controller.refresh);

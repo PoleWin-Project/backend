@@ -74,6 +74,11 @@ export class AuthService {
                     email:    created.user.email,
                     username: created.user.username,
                     roles:    created.roles,
+                    points:   500, // New user starts with 500
+                    profile: {
+                        favoriteTeamCode: null,
+                        favoriteDriverCode: null,
+                    }
                 },
             };
         } catch (e: any) {
@@ -98,6 +103,7 @@ export class AuthService {
                     { username: input.identifier },
                 ],
             },
+            include: [{ model: ProfileModel, as: "profile" }],
         });
 
         if (!user) return { ok: false as const, error: "Invalid credentials" };
@@ -124,6 +130,11 @@ export class AuthService {
                 username:        user.username,
                 isEmailVerified: user.isEmailVerified,
                 roles,
+                points:          user.profile?.points ?? 0,
+                profile: {
+                    favoriteTeamCode: user.profile?.favoriteTeamCode ?? null,
+                    favoriteDriverCode: user.profile?.favoriteDriverCode ?? null,
+                }
             },
         };
     }
@@ -243,5 +254,27 @@ export class AuthService {
 
             return { ok: true as const };
         });
+    }
+
+    async me(userId: number) {
+        const user = await UserModel.findByPk(userId, {
+            include: [{ model: ProfileModel, as: "profile" }],
+        });
+        if (!user) return { ok: false as const, error: "User not found" };
+
+        return {
+            ok: true as const,
+            user: {
+                id:       user.id,
+                email:    user.email,
+                username: user.username,
+                roles:    [user.role ?? "user"],
+                points:   user.profile?.points ?? 0,
+                profile: {
+                    favoriteTeamCode: user.profile?.favoriteTeamCode ?? null,
+                    favoriteDriverCode: user.profile?.favoriteDriverCode ?? null,
+                }
+            },
+        };
     }
 }

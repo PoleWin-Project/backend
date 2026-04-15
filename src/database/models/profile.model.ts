@@ -59,7 +59,7 @@ export class ProfileModel extends Model<
 					field: "avatar_url",
 				},
 				bio: { type: DataTypes.TEXT, allowNull: true },
-				points: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+				points: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 500 },
 				favoriteTeamCode: {
 					type: DataTypes.STRING,
 					allowNull: true,

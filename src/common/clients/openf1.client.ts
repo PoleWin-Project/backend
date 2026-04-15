@@ -1,7 +1,7 @@
 import { env } from "../../config/env";
 import { logger } from "../../config/logger";
 
-const BASE_URL  = "https://api.openf1.org/v1";
+const BASE_URL = "https://api.openf1.org/v1";
 const TOKEN_URL = "https://api.openf1.org/token";
 
 type QueryParams = Record<string, string | number | boolean | undefined>;
@@ -20,9 +20,9 @@ async function getAccessToken(): Promise<string | null> {
     }
 
     const res = await fetch(TOKEN_URL, {
-        method:  "POST",
+        method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body:    new URLSearchParams({
+        body: new URLSearchParams({
             username: env.openf1Username,
             password: env.openf1Password,
         }),
@@ -34,7 +34,7 @@ async function getAccessToken(): Promise<string | null> {
     }
 
     const data = await res.json() as { access_token: string; expires_in: string };
-    cachedToken    = data.access_token;
+    cachedToken = data.access_token;
     tokenExpiresAt = now + Number(data.expires_in) * 1000;
     logger.info({ expiresAt: new Date(tokenExpiresAt).toISOString() }, "[OpenF1] Token refreshed");
     return cachedToken;
@@ -78,7 +78,7 @@ function setCache(key: string, data: unknown): void {
 // ── HTTP client ───────────────────────────────────────────────────────────────
 
 async function get<T>(path: string, params?: QueryParams, rawFilters?: string[]): Promise<T> {
-    const url     = buildUrl(path, params, rawFilters);
+    const url = buildUrl(path, params, rawFilters);
 
     const cached = getCached<T>(url);
     if (cached) {
@@ -86,23 +86,28 @@ async function get<T>(path: string, params?: QueryParams, rawFilters?: string[])
         return cached;
     }
 
-    const token   = await getAccessToken();
+    const token = await getAccessToken();
     const headers: Record<string, string> = { Accept: "application/json" };
     if (token) {
         headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const res = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
+    try {
+        const res = await fetch(url, { headers, signal: AbortSignal.timeout(4_000) }); // lower to 4s for faster fail
 
-    if (!res.ok) {
-        throw new Error(`OpenF1 API error ${res.status}: ${res.statusText} (${url})`);
+        if (!res.ok) {
+            throw new Error(`OpenF1 API error ${res.status}: ${res.statusText} (${url})`);
+        }
+
+
+        const data = await res.json() as T;
+        setCache(url, data);
+        logger.debug({ url }, "[OpenF1] Cached response");
+        return data;
+    } catch (error) {
+        logger.error({ url, error: error instanceof Error ? error.message : String(error) }, "[OpenF1] Request failed");
+        throw error;
     }
-
-    const data = await res.json() as T;
-    setCache(url, data);
-    logger.debug({ url }, "[OpenF1] Cached response");
-    return data;
 }
 
 export const openf1Client = { get };
-

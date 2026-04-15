@@ -55,6 +55,24 @@ export class UsersRepository {
         });
     }
 
+    async searchPublic(q: string, limit = 20) {
+        return UserModel.findAll({
+            where: {
+                username: { [Op.iLike]: `%${q}%` },
+            },
+            include: [
+                {
+                    model: ProfileModel,
+                    as: "profile",
+                    attributes: ["displayName", "avatarUrl", "points", "isProfilePublic"],
+                },
+            ],
+            attributes: ["id", "username"],
+            order: [["username", "ASC"]],
+            limit,
+        });
+    }
+
     async updateMe(userId: number, patch: any) {
         return sequelize.transaction(async (tx) => {
             const user = await UserModel.findByPk(userId, { transaction: tx });
@@ -122,5 +140,11 @@ export class UsersRepository {
         if (excludeUserId) where.id = { [Op.ne]: excludeUserId };
         const count = await UserModel.count({ where });
         return count > 0;
+    }
+    async delete(userId: number) {
+        return sequelize.transaction(async (tx) => {
+            await ProfileModel.destroy({ where: { userId }, transaction: tx });
+            return UserModel.destroy({ where: { id: userId }, transaction: tx });
+        });
     }
 }
