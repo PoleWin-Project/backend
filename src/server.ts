@@ -10,6 +10,7 @@ import { initModels } from "./database/models";
 import { sequelize } from "./database/sequelize";
 import { autoResolveScheduler } from "./modules/predictions/autoresolve.scheduler";
 import { setupWsServer } from "./socket/ws.handler";
+import { SessionsService } from "./modules/sessions/sessions.service";
 
 if (env.sentryDsn) {
     Sentry.init({ dsn: env.sentryDsn, environment: env.nodeEnv });
@@ -32,6 +33,24 @@ async function bootstrap() {
     logger.info("WebSocket server initialized on /ws");
 
     autoResolveScheduler.start();
+
+    // Auto-sync sessions depuis OpenF1 si nécessaire (nouveau déploiement ou nouvelle année)
+    (async () => {
+        try {
+            const sessionsService = new SessionsService();
+            const { items, total } = await sessionsService.list({ upcoming: true, limit: 10, offset: 0 });
+            const year = new Date().getFullYear();
+            if (total < 10) {
+                logger.info(`Auto-sync sessions OpenF1 (${total} sessions futures, année ${year})`);
+                const result = await sessionsService.syncFromOpenF1(year);
+                logger.info(result, "Sessions synced from OpenF1");
+            } else {
+                logger.info(`Sessions OK — ${total} sessions futures en BDD`);
+            }
+        } catch (err) {
+            logger.warn({ err }, "Sessions auto-sync failed (non-bloquant)");
+        }
+    })();
 
     httpServer.listen(env.port, () => {
         logger.info(`Server listening on http://localhost:${env.port}`);

@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'polewin-backend'
-        SONAR_HOST_URL = 'http://sonarqube:9000'
     }
 
     stages {
@@ -32,13 +31,14 @@ pipeline {
 
         stage('SonarQube analysis') {
             steps {
-                withCredentials([string(credentialsId: 'sonar-token-backend', variable: 'SONAR_TOKEN')]) {
+                withSonarQubeEnv('SonarQube') {
                     sh '''
                         docker run --rm \
                         --network polewin_default \
                         --volumes-from jenkins \
                         -w "$WORKSPACE" \
-                        -e SONAR_TOKEN="$SONAR_TOKEN" \
+                        -e SONAR_HOST_URL="$SONAR_HOST_URL" \
+                        -e SONAR_TOKEN="$SONAR_AUTH_TOKEN" \
                         sonarsource/sonar-scanner-cli:latest \
                         sonar-scanner \
                             -Dsonar.projectKey=polewin-backend \
@@ -47,9 +47,7 @@ pipeline {
                             -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/coverage/**,**/.git/**,**/*.spec.ts,**/*.test.ts \
                             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
                             -Dsonar.typescript.tsconfigPath=tsconfig.json \
-                            -Dsonar.scm.provider=git \
-                            -Dsonar.host.url=$SONAR_HOST_URL \
-                            -Dsonar.token=$SONAR_TOKEN
+                            -Dsonar.scm.provider=git
                     '''
                 }
             }
