@@ -85,11 +85,55 @@ export class OpenF1Service {
     }
 
     async getLocations(sessionKey: number | "latest"): Promise<any[]> {
-        return openf1Client.get<any[]>("/location", { session_key: sessionKey });
+        // OpenF1 /location returns ~3.7Hz samples per driver. Fetching the full
+        // session would be millions of records, so we ask only for points from
+        // the last few seconds and keep the most recent one per driver.
+        const sinceIso = new Date(Date.now() - 6_000).toISOString();
+        const all = await openf1Client.get<any[]>(
+            "/location",
+            { session_key: sessionKey },
+            [`date>${sinceIso}`],
+            { noCache: true },
+        );
+        if (!Array.isArray(all) || all.length === 0) return [];
+
+        const latest = new Map<number, any>();
+        for (const p of all) {
+            const existing = latest.get(p.driver_number);
+            if (!existing || (p.date && p.date > existing.date)) {
+                latest.set(p.driver_number, p);
+            }
+        }
+        return [...latest.values()];
     }
 
     async getPositions(sessionKey: number): Promise<any[]> {
         return openf1Client.get<any[]>("/position", { session_key: sessionKey });
+    }
+
+    async getLatestPositions(sessionKey: number | "latest"): Promise<any[]> {
+        // OpenF1 only emits a `/position` event when a driver's position
+        // CHANGES. Filtering by recent date drops drivers who are stable at
+        // the front of the pack. We pull the full session log instead and
+        // keep the most recent event per driver. The result is small because
+        // the endpoint only logs changes, not periodic samples.
+        const all = await openf1Client.get<any[]>(
+            "/position",
+            { session_key: sessionKey },
+            undefined,
+            { noCache: true },
+        );
+        if (!Array.isArray(all) || all.length === 0) return [];
+
+        const latest = new Map<number, any>();
+        for (const p of all) {
+            if (!p.position || !p.driver_number) continue;
+            const existing = latest.get(p.driver_number);
+            if (!existing || (p.date && p.date > existing.date)) {
+                latest.set(p.driver_number, p);
+            }
+        }
+        return [...latest.values()].sort((a, b) => a.position - b.position);
     }
 
     async getLaps(sessionKey: number): Promise<any[]> {

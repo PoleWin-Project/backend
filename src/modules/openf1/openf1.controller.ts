@@ -163,6 +163,16 @@ export class OpenF1Controller {
         }
     };
 
+    getLatestPositions = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const sk = req.params.sessionKey === "latest" ? "latest" : Number(req.params.sessionKey);
+            const positions = await this.service.getLatestPositions(sk);
+            res.json({ status: "ok", positions });
+        } catch (e) {
+            next(e);
+        }
+    };
+
     getSessionResults = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const results = await this.service.getSessionResults(Number(req.params.sessionKey));
@@ -280,11 +290,22 @@ export class OpenF1Controller {
     getSessionChatChannel = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const sessionKey = Number(req.params.sessionKey);
-            const raceSession = await this.raceSessionsRepo.findByExternalId(sessionKey);
+            let raceSession = await this.raceSessionsRepo.findByExternalId(sessionKey);
+
             if (!raceSession) {
-                res.status(404).json({ status: "error", message: "Session not imported yet. No chat channel available." });
-                return;
+                const openf1Session = await this.service.getSessionByKey(sessionKey);
+                if (!openf1Session) {
+                    res.status(404).json({ status: "error", message: "Session not found on OpenF1." });
+                    return;
+                }
+                raceSession = await this.raceSessionsRepo.create({
+                    idCourseExternal: openf1Session.session_key,
+                    name: openf1Session.session_name,
+                    type: openf1Session.session_type,
+                    dateStart: openf1Session.date_start ? new Date(openf1Session.date_start) : null,
+                });
             }
+
             const channel = await this.chatChannelsService.ensureLiveChannelForSession(raceSession.id, raceSession.name);
             res.json({ status: "ok", channel });
         } catch (e) {

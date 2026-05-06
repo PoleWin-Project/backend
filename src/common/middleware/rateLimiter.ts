@@ -20,7 +20,9 @@ export const authLimiter = rateLimit({
 
 export const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 200,
+    // Live polling (locations 1Hz, chat 3s, etc.) easily exceeds a few hundred
+    // calls in 15 min. Keep a generous ceiling but still protect against abuse.
+    max: 3000,
     standardHeaders: true,
     legacyHeaders: false,
     skip: skipInTest,
