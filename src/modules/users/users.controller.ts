@@ -75,6 +75,15 @@ export class UsersController {
         }
     };
 
+    publicFriendsCount = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const count = await this.service.getPublicFriendsCount(Number(req.params.id));
+            res.json({ status: "ok", count });
+        } catch (e) {
+            next(e);
+        }
+    };
+
     deleteMe = async (req: Request, res: Response, next: NextFunction) => {
         try {
             await this.service.deleteMe(req.user!.id);

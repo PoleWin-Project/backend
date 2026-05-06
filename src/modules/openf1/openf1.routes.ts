@@ -27,6 +27,7 @@ router.get("/openf1/sessions/:sessionKey/pit",                                  
 router.get("/openf1/sessions/:sessionKey/stints",                               ctrl.getStints);
 router.get("/openf1/sessions/:sessionKey/team-radio",                           ctrl.getTeamRadio);
 router.get("/openf1/sessions/:sessionKey/locations",                            ctrl.getLatestLocations);
+router.get("/openf1/sessions/:sessionKey/positions",                            ctrl.getLatestPositions);
 router.get("/openf1/sessions/:sessionKey/results",                              ctrl.getSessionResults);
 router.get("/openf1/sessions/:sessionKey/chat-channels",                        ctrl.getSessionChatChannel);
 router.get("/openf1/sessions/:sessionKey",                                      ctrl.getSession);

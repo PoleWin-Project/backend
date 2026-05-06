@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import { RaceSessionModel } from "../../database/models";
 import { CreateSessionInput, ListSessionsQuery, UpdateSessionInput } from "./sessions.dto";
 import { OpenF1Session } from "../openf1/openf1.types";
@@ -6,6 +7,7 @@ export class SessionsRepository {
     findAll(query: ListSessionsQuery) {
         const where: any = {};
         if (query.type) where.type = query.type;
+        if (query.upcoming) where.dateStart = { [Op.gte]: new Date() };
 
         return RaceSessionModel.findAndCountAll({
             where,

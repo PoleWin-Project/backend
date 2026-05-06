@@ -30,7 +30,8 @@ async function getAccessToken(): Promise<string | null> {
     });
 
     if (!res.ok) {
-        throw new Error(`OpenF1 auth error ${res.status}: ${res.statusText}`);
+        logger.warn({ status: res.status }, "[OpenF1] Auth failed — continuing without token (API may be locked during live session).");
+        return null;
     }
 
     const data = await res.json() as { access_token: string; expires_in: string };
@@ -77,13 +78,19 @@ function setCache(key: string, data: unknown): void {
 
 // ── HTTP client ───────────────────────────────────────────────────────────────
 
-async function get<T>(path: string, params?: QueryParams, rawFilters?: string[]): Promise<T> {
+interface GetOptions {
+    noCache?: boolean;
+}
+
+async function get<T>(path: string, params?: QueryParams, rawFilters?: string[], options?: GetOptions): Promise<T> {
     const url = buildUrl(path, params, rawFilters);
 
-    const cached = getCached<T>(url);
-    if (cached) {
-        logger.debug({ url }, "[OpenF1] Cache hit");
-        return cached;
+    if (!options?.noCache) {
+        const cached = getCached<T>(url);
+        if (cached) {
+            logger.debug({ url }, "[OpenF1] Cache hit");
+            return cached;
+        }
     }
 
     const token = await getAccessToken();
@@ -96,13 +103,19 @@ async function get<T>(path: string, params?: QueryParams, rawFilters?: string[])
         const res = await fetch(url, { headers, signal: AbortSignal.timeout(4_000) }); // lower to 4s for faster fail
 
         if (!res.ok) {
+            if (res.status === 401 || res.status === 403) {
+                logger.warn({ url }, "[OpenF1] API locked (live session in progress). Returning empty result gracefully.");
+                return [] as unknown as T;
+            }
             throw new Error(`OpenF1 API error ${res.status}: ${res.statusText} (${url})`);
         }
 
 
         const data = await res.json() as T;
-        setCache(url, data);
-        logger.debug({ url }, "[OpenF1] Cached response");
+        if (!options?.noCache) {
+            setCache(url, data);
+            logger.debug({ url }, "[OpenF1] Cached response");
+        }
         return data;
     } catch (error) {
         logger.error({ url, error: error instanceof Error ? error.message : String(error) }, "[OpenF1] Request failed");

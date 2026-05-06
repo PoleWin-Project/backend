@@ -2,6 +2,7 @@ import { fn, col, literal } from "sequelize";
 import { httpErrors } from "../../common/errors/http";
 import { PronosticModel } from "../../database/models";
 import { UsersRepository } from "./users.repository";
+import { FriendsRepository } from "../friends/friends.repository";
 import {
     AdminUpdateUserInput,
     ListUsersQuery,
@@ -9,7 +10,10 @@ import {
 } from "./users.dto";
 
 export class UsersService {
-    constructor(private readonly repo = new UsersRepository()) { }
+    constructor(
+        private readonly repo = new UsersRepository(),
+        private readonly friendsRepo = new FriendsRepository(),
+    ) { }
 
     async getMe(userId: number) {
         const user = await this.repo.findById(userId);
@@ -98,5 +102,9 @@ export class UsersService {
         const deleted = await this.repo.delete(userId);
         if (!deleted) throw httpErrors.notFound("User not found");
         return true;
+    }
+
+    async getPublicFriendsCount(userId: number) {
+        return this.friendsRepo.countFriends(userId);
     }
 }

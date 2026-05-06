@@ -83,4 +83,13 @@ export class FriendsRepository {
             },
         });
     }
+
+    countFriends(userId: number) {
+        return FriendRequestModel.count({
+            where: {
+                status: "accepted",
+                [Op.or]: [{ senderId: userId }, { receiverId: userId }],
+            },
+        });
+    }
 }
