@@ -45,8 +45,7 @@ async function getAllLocations(sessionKey: number, raceStartMs: number, raceEndM
     if (cached) return cached;
     // /location is huge (~3.7Hz/driver). For Monaco 2024 race ~78 laps × 20 drivers
     // that's a lot of rows. We sample by pulling small windows to stay under quota.
-    // Simpler: pull 5-minute chunks of the real race and concatenate.
-    const all: any[] = [];
+    const raw: any[] = [];
     const chunkMs = 5 * 60 * 1000;
     for (let t = raceStartMs; t < raceEndMs; t += chunkMs) {
         const fromIso = new Date(t).toISOString();
@@ -56,10 +55,20 @@ async function getAllLocations(sessionKey: number, raceStartMs: number, raceEndM
             { session_key: sessionKey },
             [`date>=${fromIso}`, `date<${toIso}`],
         );
-        if (Array.isArray(rows)) all.push(...rows);
+        if (Array.isArray(rows)) raw.push(...rows);
     }
-    locationsCache.set(sessionKey, all);
-    return all;
+    // Index par driver: tableaux triés par date pour interpolation rapide.
+    const byDriver = new Map<number, { tMs: number; x: number; y: number }[]>();
+    for (const r of raw) {
+        if (r.driver_number == null || r.x == null || r.y == null || !r.date) continue;
+        const arr = byDriver.get(r.driver_number) ?? [];
+        arr.push({ tMs: new Date(r.date).getTime(), x: r.x, y: r.y });
+        byDriver.set(r.driver_number, arr);
+    }
+    for (const arr of byDriver.values()) arr.sort((a, b) => a.tMs - b.tMs);
+    // On stocke directement la structure indexée (cast pour reste du flux).
+    locationsCache.set(sessionKey, [byDriver] as any);
+    return [byDriver] as any;
 }
 
 async function getAllPositions(sessionKey: number) {
@@ -80,6 +89,39 @@ function computeVirtualNowMs(
     const compressedElapsedMs = Date.now() - new Date(startedAtIso).getTime();
     const progress = Math.max(0, Math.min(1, compressedElapsedMs / (durationSec * 1000)));
     return raceStartMs + progress * (raceEndMs - raceStartMs);
+}
+
+/** Position interpolée linéairement à un temps t entre deux samples voisins. */
+function sampleAt(
+    arr: { tMs: number; x: number; y: number }[],
+    tMs: number,
+): { x: number; y: number } | null {
+    if (arr.length === 0) return null;
+    if (tMs <= arr[0].tMs) return { x: arr[0].x, y: arr[0].y };
+    if (tMs >= arr[arr.length - 1].tMs) {
+        const last = arr[arr.length - 1];
+        return { x: last.x, y: last.y };
+    }
+    let lo = 0, hi = arr.length - 1;
+    while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        if (arr[mid].tMs <= tMs) lo = mid;
+        else hi = mid;
+    }
+    const a = arr[lo];
+    const b = arr[hi];
+    const denom = b.tMs - a.tMs || 1;
+    const u = (tMs - a.tMs) / denom;
+    return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
+}
+
+/** Downsample uniforme. */
+function downsample<T>(arr: T[], n: number): T[] {
+    if (arr.length <= n) return arr;
+    const out: T[] = [];
+    const step = (arr.length - 1) / (n - 1);
+    for (let i = 0; i < n; i++) out.push(arr[Math.round(i * step)]);
+    return out;
 }
 
 export async function demoWarmup(req: Request, res: Response, next: NextFunction) {
@@ -118,23 +160,56 @@ export async function demoLocations(req: Request, res: Response, next: NextFunct
 
         const { raceStartMs, raceEndMs } = await getMeta(sessionKey);
         const virtualNowMs = computeVirtualNowMs(startedAt, durationSec, raceStartMs, raceEndMs);
-
-        const all = await getAllLocations(sessionKey, raceStartMs, raceEndMs);
-        // Sample window: take the last "virtual 6 seconds" worth of points before virtualNow.
+        const frameMs = Math.max(60, Math.min(2000, Number(req.query.frameMs ?? 400)));
         const realDurationMs = raceEndMs - raceStartMs;
         const speed = realDurationMs / (durationSec * 1000);
-        const windowMs = 6_000 * speed;
-        const fromMs = virtualNowMs - windowMs;
+        // Fenêtre de course virtuelle que représente une frame du client.
+        const virtualFrameSpanMs = frameMs * speed;
+        const fromMs = virtualNowMs - virtualFrameSpanMs;
 
-        const latest = new Map<number, any>();
-        for (const p of all) {
-            const t = new Date(p.date).getTime();
-            if (t > virtualNowMs || t < fromMs) continue;
-            const cur = latest.get(p.driver_number);
-            if (!cur || t > new Date(cur.date).getTime()) latest.set(p.driver_number, p);
+        const cached = await getAllLocations(sessionKey, raceStartMs, raceEndMs);
+        const byDriver: Map<number, { tMs: number; x: number; y: number }[]> = (cached as any)[0];
+
+        // Pour chaque pilote on retourne une polyligne de waypoints (positions
+        // OpenF1 réelles) entre `fromMs` et `virtualNowMs`. Le frontend
+        // animera linéairement entre waypoints consécutifs → trajectoire
+        // qui SUIT le circuit au lieu de couper en ligne droite.
+        const MAX_WAYPOINTS = 40;
+        const out: { driver_number: number; path: { x: number; y: number }[] }[] = [];
+
+        for (const [driverNumber, arr] of byDriver.entries()) {
+            if (arr.length === 0) continue;
+
+            // Position au temps fromMs (point de départ)
+            const startPos = sampleAt(arr, fromMs);
+            // Position au temps virtualNowMs (point d'arrivée)
+            const endPos = sampleAt(arr, virtualNowMs);
+            if (!startPos || !endPos) continue;
+
+            // Samples bruts dans la fenêtre
+            const within: { x: number; y: number }[] = [];
+            // Recherche du premier index dont tMs >= fromMs via dichotomie
+            let lo = 0, hi = arr.length;
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1;
+                if (arr[mid].tMs < fromMs) lo = mid + 1;
+                else hi = mid;
+            }
+            for (let i = lo; i < arr.length && arr[i].tMs <= virtualNowMs; i++) {
+                within.push({ x: arr[i].x, y: arr[i].y });
+            }
+
+            // Compose path: start → ...samples... → end, downsamplé à MAX_WAYPOINTS
+            const composed = [startPos, ...within, endPos];
+            const path =
+                composed.length <= MAX_WAYPOINTS
+                    ? composed
+                    : downsample(composed, MAX_WAYPOINTS);
+
+            out.push({ driver_number: driverNumber, path });
         }
 
-        res.json({ status: "ok", locations: [...latest.values()] });
+        res.json({ status: "ok", locations: out });
     } catch (e) {
         next(e);
     }
