@@ -78,10 +78,10 @@ describe("PredictionsService", () => {
 
     describe("update", () => {
         it("returns updated prediction", async () => {
-            const updated = { id: 1, type: "FASTEST_LAP" } as any;
+            const updated = { id: 1, type: "SPRINT_WINNER" } as any;
             mockRepo.update.mockResolvedValue(updated);
 
-            await expect(service.update(1, { type: "FASTEST_LAP" } as any)).resolves.toBe(updated);
+            await expect(service.update(1, { type: "SPRINT_WINNER" } as any)).resolves.toBe(updated);
         });
 
         it("throws 404 when not found", async () => {

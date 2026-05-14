@@ -301,7 +301,7 @@ export class OpenF1Controller {
                 raceSession = await this.raceSessionsRepo.create({
                     idCourseExternal: openf1Session.session_key,
                     name: openf1Session.session_name,
-                    type: openf1Session.session_type,
+                    type: openf1Session.session_name,
                     dateStart: openf1Session.date_start ? new Date(openf1Session.date_start) : null,
                 });
             }

@@ -21,12 +21,20 @@ export class SyncService {
             await sleep(100); // Small gap after sessions fetch
             
             for (const s of sessions) {
-                // Focus on Qualifying and Race sessions for predictions
-                const isQualifying = s.session_name.toLowerCase().includes("qualifying") && !s.session_name.toLowerCase().includes("sprint");
-                const isRace = s.session_name.toLowerCase() === "race";
-                const isSprint = s.session_name.toLowerCase().includes("sprint") && s.session_name.toLowerCase().includes("race");
+                const name = s.session_name.toLowerCase().trim();
+                // "Qualifying" only (not "Sprint Qualifying" / "Sprint Shootout")
+                const isQualifying = name === "qualifying";
+                // "Race" only
+                const isRace = name === "race";
+                // "Sprint" only (the sprint race itself, not the sprint qualifying)
+                const isSprint = name === "sprint";
 
                 if (!isQualifying && !isRace && !isSprint) continue;
+
+                let predictionType: "POLE_POSITION" | "RACE_WINNER" | "SPRINT_WINNER";
+                if (isQualifying) predictionType = "POLE_POSITION";
+                else if (isRace) predictionType = "RACE_WINNER";
+                else predictionType = "SPRINT_WINNER";
 
                 await sequelize.transaction(async (tx) => {
                     const [session, created] = await RaceSessionModel.findOrCreate({
@@ -42,37 +50,16 @@ export class SyncService {
 
                     if (created) sessionsCreated++;
 
-                    // Create default predictions for this session
-                    if (isQualifying) {
-                        const [_, pCreated] = await PredictionModel.findOrCreate({
-                            where: { sessionId: session.id, type: "POLE_POSITION" },
-                            defaults: {
-                                sessionId: session.id,
-                                type: "POLE_POSITION",
-                                closesAt: session.dateStart,
-                            },
-                            transaction: tx,
-                        });
-                        if (pCreated) predictionsCreated++;
-                    }
-
-                    if (isRace || isSprint) {
-                        const types: ("RACE_WINNER" | "FASTEST_LAP" | "PODIUM_FINISH" | "SPRINT_WINNER")[] = 
-                            isRace ? ["RACE_WINNER", "FASTEST_LAP", "PODIUM_FINISH"] : ["SPRINT_WINNER"];
-
-                        for (const type of types) {
-                            const [_, pCreated] = await PredictionModel.findOrCreate({
-                                where: { sessionId: session.id, type },
-                                defaults: {
-                                    sessionId: session.id,
-                                    type,
-                                    closesAt: session.dateStart,
-                                },
-                                transaction: tx,
-                            });
-                            if (pCreated) predictionsCreated++;
-                        }
-                    }
+                    const [, pCreated] = await PredictionModel.findOrCreate({
+                        where: { sessionId: session.id, type: predictionType },
+                        defaults: {
+                            sessionId: session.id,
+                            type: predictionType,
+                            closesAt: session.dateStart,
+                        },
+                        transaction: tx,
+                    });
+                    if (pCreated) predictionsCreated++;
                 });
             }
         }
