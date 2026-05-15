@@ -28,6 +28,8 @@ export class UserModel extends Model<
 
 	declare role: CreationOptional<string>;
 	declare isEmailVerified: CreationOptional<boolean>;
+	declare googleId: CreationOptional<string | null>;
+	declare appleId: CreationOptional<string | null>;
 	declare lastLoginAt: Date | null;
 
 	declare createdAt: CreationOptional<Date>;
@@ -72,6 +74,18 @@ export class UserModel extends Model<
 					allowNull: false,
 					defaultValue: false,
 					field: "is_email_verified",
+				},
+				googleId: {
+					type: DataTypes.STRING,
+					allowNull: true,
+					unique: true,
+					field: "google_id",
+				},
+				appleId: {
+					type: DataTypes.STRING,
+					allowNull: true,
+					unique: true,
+					field: "apple_id",
 				},
 				lastLoginAt: { type: DataTypes.DATE, allowNull: true, field: "last_login_at" },
 				createdAt: {

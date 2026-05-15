@@ -67,6 +67,19 @@ export const RefreshTokenDto = z.object({
     refreshToken: z.string().min(10),
 });
 
+export const GoogleLoginDto = z.object({
+    idToken: z.string().min(1),
+});
+
+export const AppleLoginDto = z.object({
+    identityToken: z.string().min(1),
+    fullName: z.object({
+        givenName: z.string().nullable().optional(),
+        familyName: z.string().nullable().optional(),
+    }).optional(),
+    email: z.string().email().optional(), // Parfois Apple envoie l'email au premier sign-in
+});
+
 export type RegisterInput       = z.infer<typeof RegisterDto>;
 export type LoginInput          = z.infer<typeof LoginDto>;
 export type DeleteAccountInput  = z.infer<typeof DeleteAccountDto>;
@@ -74,6 +87,8 @@ export type ChangePasswordInput = z.infer<typeof ChangePasswordDto>;
 export type ForgotPasswordInput = z.infer<typeof ForgotPasswordDto>;
 export type ResetPasswordInput  = z.infer<typeof ResetPasswordDto>;
 export type RefreshTokenInput   = z.infer<typeof RefreshTokenDto>;
+export type GoogleLoginInput    = z.infer<typeof GoogleLoginDto>;
+export type AppleLoginInput     = z.infer<typeof AppleLoginDto>;
 
 export type VerifyEmailPayload = {
     userId:  number;

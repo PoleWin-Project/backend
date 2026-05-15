@@ -11,6 +11,8 @@ import {
     ForgotPasswordDto,
     ResetPasswordDto,
     RefreshTokenDto,
+    GoogleLoginDto,
+    AppleLoginDto,
 } from "./auth.dto";
 
 const router = Router();
@@ -22,6 +24,9 @@ router.post("/auth/login",          authLimiter, validateBody(LoginDto),        
 router.post("/auth/refresh",                     validateBody(RefreshTokenDto),     controller.refresh);
 router.post("/auth/forgot-password", authLimiter, validateBody(ForgotPasswordDto), controller.forgotPassword);
 router.post("/auth/reset-password",  authLimiter, validateBody(ResetPasswordDto),  controller.resetPassword);
+
+router.post("/auth/google", validateBody(GoogleLoginDto), controller.loginWithGoogle);
+router.post("/auth/apple", validateBody(AppleLoginDto), controller.loginWithApple);
 
 router.get( "/auth/verify-email",        controller.verifyEmail);
 router.post("/auth/resend-verify-email", requireAuth, controller.resendVerifyEmail);
