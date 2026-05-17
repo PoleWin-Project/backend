@@ -5,7 +5,7 @@ export const CreateBadgeDto = z.object({
     code:        z.string().min(1).max(50).optional(),
     description: z.string().max(1000).nullish(),
     imageUrl:    z.string().url().max(500).nullish(),
-    rarity:      z.enum(["common", "rare", "epic", "legendary"]).nullish(),
+    rarity:      z.enum(["common", "uncommon", "rare", "epic", "legendary"]).nullish(),
 });
 
 export type CreateBadgeInput = z.infer<typeof CreateBadgeDto>;

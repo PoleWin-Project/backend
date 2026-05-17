@@ -1,3 +1,4 @@
+import path from "path";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -43,6 +44,7 @@ export function createApp() {
 		},
 	}));
 	app.use(cors({ origin: env.corsOrigin, credentials: true }));
+	app.use("/badges", express.static(path.join(process.cwd(), "public/badges")));
 	app.use(express.json());
 	app.use(pinoHttp({ logger }));
 	app.use(jwtAuth);
