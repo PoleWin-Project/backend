@@ -24,7 +24,8 @@
       "Bash(npx jest --no-coverage)",
       "Bash(node -e \"const p=require\\(''./package.json''\\); console.log\\(p.version, p.name\\)\")",
       "Bash(grep -c \"application\\\\\\\\json\" \"c:/Users/USER/Documents/GitHub/backend/swagger.yaml\")",
-      "Bash(node -e \"const YAML = require\\('yamljs'\\); try { YAML.load\\('./swagger.yaml'\\); console.log\\('YAML OK'\\); } catch\\(e\\) { console.error\\('YAML ERROR:', e.message\\); }\")"
+      "Bash(node -e \"const YAML = require\\('yamljs'\\); try { YAML.load\\('./swagger.yaml'\\); console.log\\('YAML OK'\\); } catch\\(e\\) { console.error\\('YAML ERROR:', e.message\\); }\")",
+      "Bash(npx jest:*)"
     ]
   }
 }

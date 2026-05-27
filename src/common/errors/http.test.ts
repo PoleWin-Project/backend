@@ -40,4 +40,25 @@ describe("httpErrors", () => {
         const err = httpErrors.badRequest("Email invalid", "EMAIL_INVALID");
         expect(err.code).toBe("EMAIL_INVALID");
     });
+
+    it("unauthorized — default params", () => {
+        const err = httpErrors.unauthorized();
+        expect(err.statusCode).toBe(401);
+        expect(err.message).toBe("Unauthorized");
+        expect(err.code).toBe("UNAUTHORIZED");
+    });
+
+    it("notFound — default params", () => {
+        const err = httpErrors.notFound();
+        expect(err.statusCode).toBe(404);
+        expect(err.message).toBe("Not found");
+        expect(err.code).toBe("NOT_FOUND");
+    });
+
+    it("unprocessableEntity — default params", () => {
+        const err = httpErrors.unprocessableEntity();
+        expect(err.statusCode).toBe(422);
+        expect(err.message).toBe("Unprocessable entity");
+        expect(err.code).toBe("UNPROCESSABLE_ENTITY");
+    });
 });

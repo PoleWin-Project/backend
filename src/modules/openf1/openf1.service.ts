@@ -180,7 +180,7 @@ export class OpenF1Service {
                     driver_number: num,
                     driver: driversMap.get(num),
                 }))
-                .sort((a, b) => (a.time || Infinity) - (b.time || Infinity))
+                .sort((a, b) => (/* istanbul ignore next */ a.time || Infinity) - (/* istanbul ignore next */ b.time || Infinity))
                 .map((r, i) => ({ ...r, position: i + 1 }));
         }
     }

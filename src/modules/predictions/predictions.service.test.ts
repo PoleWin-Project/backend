@@ -156,6 +156,187 @@ describe("PredictionsService", () => {
                 service.placePronostic(1, 1, { value: "VER", pointsStaked: 50 }),
             ).rejects.toMatchObject({ statusCode: 422 });
         });
+
+        it("throws 422 when profile not found", async () => {
+            mockRepo.findPronosticByUserAndPrediction.mockReset();
+            mockRepo.findPronosticByUserAndPrediction.mockResolvedValue(null);
+            mockRepo.findProfileByUserId.mockResolvedValue(null);
+
+            await expect(
+                service.placePronostic(1, 1, { value: "VER", pointsStaked: 50 }),
+            ).rejects.toMatchObject({ statusCode: 422 });
+        });
+
+        it("throws 404 when prediction not found", async () => {
+            mockRepo.findById.mockResolvedValue(null);
+            await expect(service.placePronostic(1, 99, { value: "VER", pointsStaked: 50 }))
+                .rejects.toMatchObject({ statusCode: 404 });
+        });
+
+        it("uses defaultMultiplier ?? 2 when defaultMultiplier is undefined", async () => {
+            const predNoMultiplier = { id: 1, closesAt: null, type: "RACE_WINNER", session: null };
+            mockRepo.findById.mockResolvedValue(predNoMultiplier);
+            // Reset to clear any Once values queued by beforeEach, then set exactly 2
+            mockRepo.findPronosticByUserAndPrediction.mockReset();
+            mockRepo.findPronosticByUserAndPrediction
+                .mockResolvedValueOnce(null)
+                .mockResolvedValueOnce(fakePronostic);
+            mockRepo.findProfileByUserId.mockResolvedValue({ ...fakeProfile, points: 100 });
+            mockRepo.createPronosticWithDetail.mockResolvedValue(fakePronostic);
+
+            await service.placePronostic(1, 1, { value: "VER", pointsStaked: 50 });
+
+            expect(mockRepo.createPronosticWithDetail).toHaveBeenCalledWith(1, 1, 50, "VER", 2, {});
+        });
+    });
+
+    // ── updatePronostic ─────────────────────────────────────────────────────────
+
+    describe("updatePronostic", () => {
+        const fakePred = { id: 1, closesAt: null };
+        const makePronostic = (stake: number, value = "VER") => ({
+            pointsStaked: stake,
+            detail: { value, update: jest.fn().mockResolvedValue({}) },
+            update: jest.fn().mockResolvedValue({}),
+        });
+
+        it("met à jour la mise et la valeur", async () => {
+            const existing = makePronostic(50);
+            const fakeProfile = { points: 100, update: jest.fn().mockResolvedValue({}) } as any;
+            const updated = { id: 1 };
+
+            mockRepo.findById.mockResolvedValue(fakePred);
+            mockRepo.findPronosticByUserAndPrediction
+                .mockResolvedValueOnce(existing)
+                .mockResolvedValueOnce(updated);
+            mockRepo.findProfileByUserId.mockResolvedValue(fakeProfile);
+
+            const result = await service.updatePronostic(1, 1, { pointsStaked: 80, value: "LEC" });
+
+            expect(fakeProfile.update).toHaveBeenCalledWith({ points: 70 }, { transaction: {} });
+            expect(existing.update).toHaveBeenCalledWith({ pointsStaked: 80 }, { transaction: {} });
+            expect(existing.detail.update).toHaveBeenCalledWith({ value: "LEC" }, { transaction: {} });
+            expect(result).toBe(updated);
+        });
+
+        it("ne modifie pas les points si diff == 0", async () => {
+            const existing = makePronostic(50);
+            const fakeProfile = { points: 100, update: jest.fn().mockResolvedValue({}) } as any;
+            const updated = { id: 1 };
+
+            mockRepo.findById.mockResolvedValue(fakePred);
+            mockRepo.findPronosticByUserAndPrediction
+                .mockResolvedValueOnce(existing)
+                .mockResolvedValueOnce(updated);
+            mockRepo.findProfileByUserId.mockResolvedValue(fakeProfile);
+
+            await service.updatePronostic(1, 1, { pointsStaked: 50 });
+
+            expect(fakeProfile.update).not.toHaveBeenCalled();
+            expect(existing.update).not.toHaveBeenCalled();
+        });
+
+        it("throws 404 si prediction non trouvée", async () => {
+            mockRepo.findById.mockResolvedValue(null);
+
+            await expect(service.updatePronostic(1, 99, {})).rejects.toMatchObject({ statusCode: 404 });
+        });
+
+        it("throws 422 si prediction fermée", async () => {
+            mockRepo.findById.mockResolvedValue({ id: 1, closesAt: new Date(Date.now() - 1000) });
+
+            await expect(service.updatePronostic(1, 1, {})).rejects.toMatchObject({ statusCode: 422 });
+        });
+
+        it("throws 404 si pronostic non trouvé", async () => {
+            mockRepo.findById.mockResolvedValue(fakePred);
+            mockRepo.findPronosticByUserAndPrediction.mockResolvedValue(null);
+            mockRepo.findProfileByUserId.mockResolvedValue({ points: 100 });
+
+            await expect(service.updatePronostic(1, 1, {})).rejects.toMatchObject({ statusCode: 404 });
+        });
+
+        it("throws 422 si pas assez de points pour augmenter la mise", async () => {
+            const existing = makePronostic(50);
+            const fakeProfile = { points: 10, update: jest.fn() } as any;
+
+            mockRepo.findById.mockResolvedValue(fakePred);
+            mockRepo.findPronosticByUserAndPrediction.mockResolvedValueOnce(existing);
+            mockRepo.findProfileByUserId.mockResolvedValue(fakeProfile);
+
+            await expect(
+                service.updatePronostic(1, 1, { pointsStaked: 200 }),
+            ).rejects.toMatchObject({ statusCode: 422 });
+        });
+
+        it("ne met pas à jour le détail si existing.detail est null", async () => {
+            const existing = {
+                pointsStaked: 50,
+                detail: null,
+                update: jest.fn().mockResolvedValue({}),
+            };
+            const fakeProfile = { points: 100, update: jest.fn().mockResolvedValue({}) } as any;
+            const updated = { id: 1 };
+
+            mockRepo.findById.mockResolvedValue(fakePred);
+            mockRepo.findPronosticByUserAndPrediction
+                .mockResolvedValueOnce(existing)
+                .mockResolvedValueOnce(updated);
+            mockRepo.findProfileByUserId.mockResolvedValue(fakeProfile);
+
+            const result = await service.updatePronostic(1, 1, { value: "LEC" });
+
+            expect(result).toBe(updated);
+            expect(existing.update).not.toHaveBeenCalled();
+        });
+
+        it("throws 422 si profile non trouvé", async () => {
+            const existing = makePronostic(50);
+            mockRepo.findById.mockResolvedValue(fakePred);
+            mockRepo.findPronosticByUserAndPrediction.mockResolvedValueOnce(existing);
+            mockRepo.findProfileByUserId.mockResolvedValue(null);
+
+            await expect(service.updatePronostic(1, 1, {})).rejects.toMatchObject({ statusCode: 422 });
+        });
+    });
+
+    // ── getMyPronostic / listMyPronostics / getMyPronosticsForSession / getAllPronosticsForPrediction
+
+    describe("getMyPronostic", () => {
+        it("delègue au repo", async () => {
+            const fake = { id: 1 } as any;
+            mockRepo.findPronosticByUserAndPrediction.mockResolvedValue(fake);
+
+            await expect(service.getMyPronostic(1, 1)).resolves.toBe(fake);
+        });
+    });
+
+    describe("listMyPronostics", () => {
+        it("retourne la liste paginée", async () => {
+            mockRepo.findMyPronostics.mockResolvedValue({ rows: [{ id: 1 }], count: 1 });
+
+            const result = await service.listMyPronostics(1, { limit: 20, offset: 0 });
+
+            expect(result).toMatchObject({ items: [{ id: 1 }], total: 1, limit: 20, offset: 0 });
+        });
+    });
+
+    describe("getMyPronosticsForSession", () => {
+        it("delègue au repo", async () => {
+            const fake = [{ id: 1 }] as any;
+            mockRepo.findMyPronosticsForSession.mockResolvedValue(fake);
+
+            await expect(service.getMyPronosticsForSession(1, 10)).resolves.toBe(fake);
+        });
+    });
+
+    describe("getAllPronosticsForPrediction", () => {
+        it("delègue au repo", async () => {
+            const fake = [{ id: 1 }] as any;
+            mockRepo.findAllPronosticsForPrediction.mockResolvedValue(fake);
+
+            await expect(service.getAllPronosticsForPrediction(1)).resolves.toBe(fake);
+        });
     });
 
     // ── cancelPronostic ─────────────────────────────────────────────────────────
@@ -194,12 +375,72 @@ describe("PredictionsService", () => {
 
             await expect(service.cancelPronostic(1, 1)).rejects.toMatchObject({ statusCode: 404 });
         });
+
+        it("annule sans erreur si le profil est null", async () => {
+            const fakeDetail = { destroy: jest.fn().mockResolvedValue(undefined) };
+            const fakePronostic = {
+                pointsStaked: 30,
+                detail: fakeDetail,
+                destroy: jest.fn().mockResolvedValue(undefined),
+            } as any;
+
+            mockRepo.findById.mockResolvedValue({ id: 1, closesAt: null });
+            mockRepo.findPronosticByUserAndPrediction.mockResolvedValue(fakePronostic);
+            mockRepo.findProfileByUserId.mockResolvedValue(null);
+
+            await expect(service.cancelPronostic(1, 1)).resolves.toBeUndefined();
+            expect(fakeDetail.destroy).toHaveBeenCalledWith({ transaction: {} });
+            expect(fakePronostic.destroy).toHaveBeenCalledWith({ transaction: {} });
+        });
+
+        it("annule sans erreur si le détail est null", async () => {
+            const fakePronostic = {
+                pointsStaked: 30,
+                detail: null,
+                destroy: jest.fn().mockResolvedValue(undefined),
+            } as any;
+            const fakeProfile = { points: 70, update: jest.fn().mockResolvedValue({}) } as any;
+
+            mockRepo.findById.mockResolvedValue({ id: 1, closesAt: null });
+            mockRepo.findPronosticByUserAndPrediction.mockResolvedValue(fakePronostic);
+            mockRepo.findProfileByUserId.mockResolvedValue(fakeProfile);
+
+            await expect(service.cancelPronostic(1, 1)).resolves.toBeUndefined();
+            expect(fakePronostic.destroy).toHaveBeenCalledWith({ transaction: {} });
+        });
+
+        it("throws 404 when prediction not found", async () => {
+            mockRepo.findById.mockResolvedValue(null);
+            await expect(service.cancelPronostic(1, 99)).rejects.toMatchObject({ statusCode: 404 });
+        });
+
+        it("annule avec profile.points null — crédite 0 + stake", async () => {
+            const fakeDetail = { destroy: jest.fn().mockResolvedValue(undefined) };
+            const fakePronostic = {
+                pointsStaked: 30,
+                detail: fakeDetail,
+                destroy: jest.fn().mockResolvedValue(undefined),
+            } as any;
+            const fakeProfile = { points: null, update: jest.fn().mockResolvedValue({}) } as any;
+
+            mockRepo.findById.mockResolvedValue({ id: 1, closesAt: null });
+            mockRepo.findPronosticByUserAndPrediction.mockResolvedValue(fakePronostic);
+            mockRepo.findProfileByUserId.mockResolvedValue(fakeProfile);
+
+            await service.cancelPronostic(1, 1);
+            expect(fakeProfile.update).toHaveBeenCalledWith({ points: 30 }, { transaction: {} });
+        });
     });
 
     // ── resolve ─────────────────────────────────────────────────────────────────
 
     describe("resolve", () => {
         const fakePred = { id: 1, type: "RACE_WINNER", session: { idCourseExternal: 9000 } } as any;
+
+        it("throws 404 when prediction not found", async () => {
+            mockRepo.findById.mockResolvedValue(null);
+            await expect(service.resolve(1, { winningValue: "VER" })).rejects.toMatchObject({ statusCode: 404 });
+        });
 
         const makePronostic = (value: string) => ({
             userId:      1,
@@ -264,6 +505,63 @@ describe("PredictionsService", () => {
             mockRepo.findAllPronosticsForPrediction.mockResolvedValue([]);
 
             await expect(service.resolve(1, {})).rejects.toMatchObject({ statusCode: 422 });
+        });
+
+        it("traite le cas où detail est null (userValue vide → loser)", async () => {
+            const pronostic = {
+                userId:       1,
+                pointsStaked: 100,
+                status:       "submitted",
+                detail:       null,
+                update:       jest.fn().mockResolvedValue({}),
+            };
+
+            mockRepo.findById.mockResolvedValue(fakePred);
+            mockRepo.findAllPronosticsForPrediction.mockResolvedValue([pronostic] as any);
+
+            const result = await service.resolve(1, { winningValue: "VER" });
+
+            expect(pronostic.update).toHaveBeenCalledWith(
+                { status: "lost", pointsEarned: 0 }, { transaction: {} },
+            );
+            expect(result).toMatchObject({ resolved: 1, winningValue: "VER" });
+        });
+
+        it("résout des pronostics en awaiting_verification", async () => {
+            const pronostic = {
+                userId:       1,
+                pointsStaked: 100,
+                status:       "awaiting_verification",
+                detail:       { value: "VER", multiplier: 2 },
+                update:       jest.fn().mockResolvedValue({}),
+            };
+            const fakeProfile = { points: 0, update: jest.fn().mockResolvedValue({}) } as any;
+
+            mockRepo.findById.mockResolvedValue(fakePred);
+            mockRepo.findAllPronosticsForPrediction.mockResolvedValue([pronostic] as any);
+            mockRepo.findProfileByUserId.mockResolvedValue(fakeProfile);
+
+            const result = await service.resolve(1, { winningValue: "VER" });
+
+            expect(pronostic.update).toHaveBeenCalledWith(
+                { status: "won", pointsEarned: 200 }, { transaction: {} },
+            );
+            expect(result.resolved).toBe(1);
+        });
+
+        it("ne crash pas si le profil du gagnant est null", async () => {
+            const winner = makePronostic("VER");
+
+            mockRepo.findById.mockResolvedValue(fakePred);
+            mockRepo.findAllPronosticsForPrediction.mockResolvedValue([winner] as any);
+            mockRepo.findProfileByUserId.mockResolvedValue(null);
+
+            const result = await service.resolve(1, { winningValue: "VER" });
+
+            expect(winner.update).toHaveBeenCalledWith(
+                { status: "won", pointsEarned: 200 }, { transaction: {} },
+            );
+            expect(result).toMatchObject({ resolved: 1, winningValue: "VER" });
         });
     });
 });

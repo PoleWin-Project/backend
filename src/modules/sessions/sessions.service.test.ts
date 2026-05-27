@@ -1,16 +1,25 @@
-import { SessionsService } from "./sessions.service";
-
 const mockRepo = {
-    findAll:  jest.fn(),
-    findById: jest.fn(),
-    create:   jest.fn(),
-    update:   jest.fn(),
-    delete:   jest.fn(),
+    findAll:           jest.fn(),
+    findById:          jest.fn(),
+    create:            jest.fn(),
+    update:            jest.fn(),
+    delete:            jest.fn(),
+    upsertFromOpenF1:  jest.fn(),
 };
 
 jest.mock("./sessions.repository", () => ({
     SessionsRepository: jest.fn().mockImplementation(() => mockRepo),
 }));
+
+const mockOpenF1Svc = {
+    getSessions: jest.fn(),
+};
+
+jest.mock("../openf1/openf1.service", () => ({
+    OpenF1Service: jest.fn().mockImplementation(() => mockOpenF1Svc),
+}));
+
+import { SessionsService } from "./sessions.service";
 
 describe("SessionsService", () => {
     let service: SessionsService;
@@ -100,6 +109,32 @@ describe("SessionsService", () => {
             mockRepo.delete.mockResolvedValue(false);
 
             await expect(service.delete(99)).rejects.toMatchObject({ statusCode: 404 });
+        });
+    });
+
+    // ── syncFromOpenF1 ───────────────────────────────────────────────────────────
+
+    describe("syncFromOpenF1", () => {
+        it("synchronise les sessions depuis OpenF1 et retourne les stats", async () => {
+            const fakeSessions = [{ id: 1 }, { id: 2 }] as any;
+            mockOpenF1Svc.getSessions.mockResolvedValue(fakeSessions);
+            mockRepo.upsertFromOpenF1.mockResolvedValue({ created: 1, updated: 1 });
+
+            const result = await service.syncFromOpenF1(2025);
+
+            expect(mockOpenF1Svc.getSessions).toHaveBeenCalledWith({ year: 2025 });
+            expect(result).toEqual({ created: 1, updated: 1, total: 2 });
+        });
+
+        it("utilise l'année courante si non fournie", async () => {
+            mockOpenF1Svc.getSessions.mockResolvedValue([]);
+            mockRepo.upsertFromOpenF1.mockResolvedValue({ created: 0, updated: 0 });
+
+            await service.syncFromOpenF1();
+
+            expect(mockOpenF1Svc.getSessions).toHaveBeenCalledWith({
+                year: new Date().getFullYear(),
+            });
         });
     });
 });
