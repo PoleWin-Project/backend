@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { OpenF1Controller } from "./openf1.controller";
 import * as live from "./openf1.live.controller";
+import * as demo from "./openf1.demo.controller";
 
 const router = Router();
 const ctrl = new OpenF1Controller();
@@ -36,6 +37,10 @@ router.get("/openf1/sessions",                                                  
 router.get("/openf1/drivers/:driverNumber",                                     ctrl.getDriverByNumber);
 router.get("/openf1/drivers",                                                   ctrl.listDrivers);
 router.get("/openf1/teams",                                                     ctrl.listTeams);
+
+router.get("/openf1/demo/:sessionKey/warmup",                                   demo.demoWarmup);
+router.get("/openf1/demo/:sessionKey/locations",                                demo.demoLocations);
+router.get("/openf1/demo/:sessionKey/positions",                                demo.demoPositions);
 
 router.get("/openf1/live/session",                                              live.liveSession);
 router.get("/openf1/live/race-control",                                         live.liveRaceControl);

@@ -18,7 +18,7 @@ export class PredictionModel extends Model<
 > {
 	declare id: CreationOptional<number>;
 	declare sessionId: number;
-	declare type: "POLE_POSITION" | "RACE_WINNER" | "FASTEST_LAP" | "PODIUM_FINISH" | "DNF" | "SAFETY_CAR" | "SPRINT_WINNER";
+	declare type: "POLE_POSITION" | "RACE_WINNER" | "SPRINT_WINNER";
 	declare scope: string | null;
 	declare closesAt: Date | null;
 	declare createdAt: CreationOptional<Date>;

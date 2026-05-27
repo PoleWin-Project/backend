@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthService } from "./auth.service";
+import { verifyGoogleToken, verifyAppleToken } from "./auth.social";
 import { withLinks, registerLinks, loginLinks } from "../../common/utils/hateoas";
 
 export class AuthController {
@@ -21,6 +22,34 @@ export class AuthController {
     login = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const result = await this.authService.login(req.body);
+            if (!result.ok)
+                return res
+                    .status(401)
+                    .json({ status: "error", message: result.error });
+            return res.json(withLinks(result, loginLinks));
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    loginWithGoogle = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { idToken } = req.body;
+            const result = await verifyGoogleToken(idToken);
+            if (!result.ok)
+                return res
+                    .status(401)
+                    .json({ status: "error", message: result.error });
+            return res.json(withLinks(result, loginLinks));
+        } catch (e) {
+            next(e);
+        }
+    };
+
+    loginWithApple = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { identityToken, email, fullName } = req.body;
+            const result = await verifyAppleToken(identityToken, email, fullName);
             if (!result.ok)
                 return res
                     .status(401)

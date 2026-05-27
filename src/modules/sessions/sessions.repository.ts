@@ -46,11 +46,10 @@ export class SessionsRepository {
 
     async upsertFromOpenF1(sessions: OpenF1Session[]): Promise<{ created: number; updated: number }> {
         let created = 0, updated = 0;
-        if (sessions.length > 0) console.log('DEBUG: First session object keys:', Object.keys(sessions[0]), 'Location:', sessions[0].location);
         for (const s of sessions) {
             const defaults = {
                 name: `${s.country_name} - ${s.session_name}`,
-                type: s.session_type,
+                type: s.session_name,
                 location: s.location,
                 dateStart: new Date(s.date_start),
             };

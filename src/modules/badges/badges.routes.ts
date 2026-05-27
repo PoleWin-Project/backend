@@ -7,6 +7,7 @@ import { CreateBadgeDto, UpdateBadgeDto, AwardBadgeDto } from "./badges.dto";
 const router = Router();
 const ctrl = new BadgesController();
 
+router.get("/badges",            /* public */               ctrl.listBadges);
 router.get("/users/me/badges",   requireAuth,               ctrl.myBadges);
 router.get("/users/:id/badges",                             ctrl.userBadges);
 
