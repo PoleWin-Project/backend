@@ -29,6 +29,7 @@ router.post("/auth/google", validateBody(GoogleLoginDto), controller.loginWithGo
 router.post("/auth/apple", validateBody(AppleLoginDto), controller.loginWithApple);
 
 router.get( "/auth/verify-email",        controller.verifyEmail);
+router.get( "/auth/reset-password-link", controller.resetPasswordLink);
 router.post("/auth/resend-verify-email", requireAuth, controller.resendVerifyEmail);
 
 router.post("/auth/change-password", requireAuth, validateBody(ChangePasswordDto), controller.changePassword);

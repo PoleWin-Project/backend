@@ -19,7 +19,7 @@ export function verifyEmailTemplate(token: string) {
 }
 
 export function resetPasswordTemplate(token: string) {
-    const url = `${env.appUrl}/reset-password?token=${token}`;
+    const url = `${env.appUrl}/api/v1/auth/reset-password-link?token=${token}`;
     return {
         subject: "Réinitialisation de mot de passe — PoleWin",
         html: `

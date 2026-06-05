@@ -147,6 +147,18 @@ export class AuthController {
         }
     };
 
+    resetPasswordLink = (req: Request, res: Response) => {
+        const token = String(req.query.token || "");
+        const deepLink = `polewin://reset-password?token=${encodeURIComponent(token)}`;
+        res.setHeader("Content-Type", "text/html");
+        res.send(`<!DOCTYPE html><html><head>
+            <meta http-equiv="refresh" content="0; url=${deepLink}">
+            <script>window.location.href="${deepLink}";</script>
+        </head><body>
+            <p>Redirection en cours... <a href="${deepLink}">Cliquez ici</a> si rien ne se passe.</p>
+        </body></html>`);
+    };
+
     resetPassword = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const { token, newPassword } = req.body;
