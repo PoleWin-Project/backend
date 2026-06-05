@@ -1,25 +1,8 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import { env } from "./env";
 import { logger } from "./logger";
 
-// If SMTP_HOST is not configured, use a no-op transporter (logs instead of sending)
-function createTransporter() {
-    if (!env.smtp.host) {
-        logger.warn("SMTP_HOST not configured — emails will be logged only");
-        return nodemailer.createTransport({ jsonTransport: true });
-    }
-
-    return nodemailer.createTransport({
-        host: env.smtp.host,
-        port: env.smtp.port,
-        secure: env.smtp.port === 465,
-        auth: env.smtp.user && env.smtp.pass
-            ? { user: env.smtp.user, pass: env.smtp.pass }
-            : undefined,
-    });
-}
-
-export const mailer = createTransporter();
+const resend = env.resendApiKey ? new Resend(env.resendApiKey) : null;
 
 export async function sendMail(opts: {
     to:      string;
@@ -27,13 +10,13 @@ export async function sendMail(opts: {
     html:    string;
     text?:   string;
 }) {
-    if (!env.smtp.host) {
-        logger.info({ to: opts.to, subject: opts.subject }, "📧 [DEV] Email not sent (no SMTP)");
+    if (!resend) {
+        logger.info({ to: opts.to, subject: opts.subject }, "📧 [DEV] Email not sent (no RESEND_API_KEY)");
         return;
     }
 
-    await mailer.sendMail({
-        from:    env.smtp.from,
+    await resend.emails.send({
+        from:    env.emailFrom,
         to:      opts.to,
         subject: opts.subject,
         html:    opts.html,

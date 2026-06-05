@@ -28,12 +28,9 @@ const EnvSchema = z.object({
     // Sentry
     SENTRY_DSN:             z.string().url().optional(),
 
-    // SMTP (Nodemailer)
-    SMTP_HOST:              z.string().optional(),
-    SMTP_PORT:              z.coerce.number().int().positive().default(587),
-    SMTP_USER:              z.string().optional(),
-    SMTP_PASS:              z.string().optional(),
-    SMTP_FROM:              z.string().default("PoleWin <no-reply@polewin.app>"),
+    // Resend (email)
+    RESEND_API_KEY:         z.string().optional(),
+    SMTP_FROM:              z.string().default("PoleWin <no-reply@polewin.fr>"),
 
     // App
     APP_URL:                z.string().url().default("http://localhost:3000"),
@@ -64,12 +61,7 @@ export const env = {
     openf1Username:        d.OPENF1_USERNAME,
     openf1Password:        d.OPENF1_PASSWORD,
     sentryDsn:             d.SENTRY_DSN,
-    smtp: {
-        host:              d.SMTP_HOST,
-        port:              d.SMTP_PORT,
-        user:              d.SMTP_USER,
-        pass:              d.SMTP_PASS,
-        from:              d.SMTP_FROM,
-    },
+    resendApiKey:          d.RESEND_API_KEY,
+    emailFrom:             d.SMTP_FROM,
     appUrl:                d.APP_URL,
 };
