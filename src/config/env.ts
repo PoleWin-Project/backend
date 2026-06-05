@@ -33,7 +33,7 @@ const EnvSchema = z.object({
     SMTP_FROM:              z.string().default("PoleWin <no-reply@polewin.fr>"),
 
     // App
-    APP_URL:                z.string().url().default("http://localhost:3000"),
+    APP_URL:                z.string().default("http://localhost:3000"),
 });
 
 const result = EnvSchema.safeParse(process.env);
