@@ -22,7 +22,7 @@ async function getFinalPositions(sessionKey: number): Promise<{ driverNumber: nu
 
     return Array.from(latest.values()).map((p) => ({
         driverNumber: p.driver_number,
-        position:     p.position,
+        position: p.position,
     }));
 }
 
@@ -34,13 +34,49 @@ export async function autoResolve(type: PredictionType, sessionKey: number): Pro
     try {
         switch (type) {
             case "RACE_WINNER":
-            case "POLE_POSITION":
             case "SPRINT_WINNER": {
                 const positions = await getFinalPositions(sessionKey);
                 const p1 = positions.find((p) => p.position === 1);
                 if (!p1) return null;
                 const map = await getDriverAcronymMap(sessionKey);
                 return map.get(p1.driverNumber) ?? null;
+            }
+            case "POLE_POSITION": {
+                const laps = await openf1Client.get<OpenF1Lap[]>("/laps", { session_key: sessionKey });
+                const validLaps = laps.filter((l) => l.lap_duration !== null && !l.is_pit_out_lap);
+                if (!validLaps.length) return null;
+
+                validLaps.sort((a, b) => new Date(a.date_start!).getTime() - new Date(b.date_start!).getTime());
+
+                const phases: OpenF1Lap[][] = [];
+                let currentPhase: OpenF1Lap[] = [];
+                for (let i = 0; i < validLaps.length; i++) {
+                    if (i === 0) {
+                        currentPhase.push(validLaps[i]);
+                    } else {
+                        const gap = new Date(validLaps[i].date_start!).getTime() - new Date(validLaps[i - 1].date_start!).getTime();
+                        if (gap > 5 * 60 * 1000) { // 5 minutes gap
+                            phases.push(currentPhase);
+                            currentPhase = [validLaps[i]];
+                        } else {
+                            currentPhase.push(validLaps[i]);
+                        }
+                    }
+                }
+                phases.push(currentPhase);
+
+                const q3Laps: OpenF1Lap[] = [];
+                for (let i = phases.length - 1; i >= 0; i--) {
+                    const uniqueDrivers = new Set(phases[i].map(l => l.driver_number)).size;
+                    if (uniqueDrivers > 10) break; // Q3 has max 10 drivers
+                    q3Laps.push(...phases[i]);
+                }
+
+                const targetLaps = q3Laps.length > 0 ? q3Laps : validLaps;
+                const fastest = targetLaps.reduce((min, l) => l.lap_duration! < min.lap_duration! ? l : min);
+
+                const map = await getDriverAcronymMap(sessionKey);
+                return map.get(fastest.driver_number) ?? null;
             }
             case "FASTEST_LAP": {
                 const laps = await openf1Client.get<OpenF1Lap[]>("/laps", { session_key: sessionKey });
