@@ -4,7 +4,6 @@ export const PREDICTION_TYPES = [
     "POLE_POSITION",
     "RACE_WINNER",
     "FASTEST_LAP",
-    "PODIUM_FINISH",
     "DNF",
     "SAFETY_CAR",
     "SPRINT_WINNER",

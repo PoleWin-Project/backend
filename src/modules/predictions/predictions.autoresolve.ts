@@ -53,17 +53,7 @@ export async function autoResolve(type: PredictionType, sessionKey: number): Pro
                 return map.get(fastest.driver_number) ?? null;
             }
 
-            case "PODIUM_FINISH": {
-                const positions = await getFinalPositions(sessionKey);
-                const podium = positions.filter((p) => p.position <= 3);
-                if (podium.length < 3) return null; // race not finished yet
-                const map = await getDriverAcronymMap(sessionKey);
-                const acronyms = podium
-                    .sort((a, b) => a.position - b.position)
-                    .map((p) => map.get(p.driverNumber))
-                    .filter(Boolean) as string[];
-                return acronyms.length === 3 ? acronyms.join(",") : null;
-            }
+
 
             case "DNF": {
                 const laps = await openf1Client.get<OpenF1Lap[]>("/laps", { session_key: sessionKey });
@@ -129,5 +119,14 @@ export function isWinnerForType(
     userValue: string,
     winningValue: string,
 ): boolean {
-    return userValue.trim().toUpperCase() === winningValue.trim().toUpperCase();
+    const user = userValue.trim().toUpperCase();
+    switch (_type) {
+        case "DNF":
+            return winningValue
+                .split(",")
+                .map((v) => v.trim().toUpperCase())
+                .includes(user);
+        default:
+            return user === winningValue.trim().toUpperCase();
+    }
 }
