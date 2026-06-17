@@ -3,7 +3,11 @@ import { z } from "zod";
 export const PREDICTION_TYPES = [
     "POLE_POSITION",
     "RACE_WINNER",
+    "FASTEST_LAP",
+    "DNF",
+    "SAFETY_CAR",
     "SPRINT_WINNER",
+    "PODIUM",
 ] as const;
 
 export const CreatePredictionDto = z.object({
