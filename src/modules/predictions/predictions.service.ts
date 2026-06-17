@@ -202,6 +202,14 @@ export class PredictionsService {
         await pred.update({ winningValue: resolvedValue });
 
         // 3. Resolve and distribute points
+        const outcomes: {
+            userId: number;
+            pronosticId: number;
+            value: string;
+            won: boolean;
+            pointsEarned: number;
+            pointsStaked: number;
+        }[] = [];
         await sequelize.transaction(async (tx) => {
             for (const pronostic of toResolve) {
                 const userValue = pronostic.detail?.value ?? "";
