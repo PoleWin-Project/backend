@@ -70,7 +70,11 @@ export class PredictionsRepository {
             where,
             include: [
                 { model: PronosticDetailModel, as: "detail" },
-                { model: PredictionModel, as: "prediction" },
+                { 
+                    model: PredictionModel, 
+                    as: "prediction",
+                    include: [{ model: RaceSessionModel, as: "session" }]
+                },
             ],
             order: [["id", "DESC"]],
             limit: query.limit,

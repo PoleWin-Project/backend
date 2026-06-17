@@ -197,16 +197,37 @@ export class PredictionsService {
             };
         }
 
-        // 3. Resolve and distribute points
+        // Save winning value to prediction
         const resolvedValue = winningValue;
-        const outcomes: { userId: number; pronosticId: number; value: string; won: boolean; pointsEarned: number; pointsStaked: number }[] = [];
+        await pred.update({ winningValue: resolvedValue });
+
+        // 3. Resolve and distribute points
         await sequelize.transaction(async (tx) => {
             for (const pronostic of toResolve) {
                 const userValue = pronostic.detail?.value ?? "";
-                const isWinner = userValue
-                    ? isWinnerForType(pred.type, userValue, resolvedValue)
-                    : false;
-                const multiplier   = pronostic.detail?.multiplier ?? 2;
+                
+                let isWinner = false;
+                let multiplier = pronostic.detail?.multiplier ?? 2;
+
+                if (pred.type === 'PODIUM') {
+                    const winningArr = resolvedValue.split(',');
+                    const userArr = userValue.split(',');
+                    const hasSameDrivers = winningArr.length === 3 && userArr.length === 3 && winningArr.every(d => userArr.includes(d));
+                    const isExactOrder = userValue === resolvedValue;
+
+                    if (isExactOrder) {
+                        isWinner = true;
+                        multiplier = 4; // x4 for exact order
+                    } else if (hasSameDrivers) {
+                        isWinner = true;
+                        // base multiplier remains x2
+                    } else {
+                        isWinner = false;
+                    }
+                } else {
+                    isWinner = userValue ? isWinnerForType(pred.type, userValue, resolvedValue) : false;
+                }
+
                 const pointsEarned = isWinner ? Math.floor(pronostic.pointsStaked * multiplier) : 0;
 
                 await pronostic.update(
