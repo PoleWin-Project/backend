@@ -18,9 +18,10 @@ export class PredictionModel extends Model<
 > {
 	declare id: CreationOptional<number>;
 	declare sessionId: number;
-	declare type: "POLE_POSITION" | "RACE_WINNER" | "SPRINT_WINNER";
+	declare type: "POLE_POSITION" | "RACE_WINNER" | "FASTEST_LAP" | "DNF" | "SAFETY_CAR" | "SPRINT_WINNER" | "PODIUM";
 	declare scope: string | null;
 	declare closesAt: Date | null;
+	declare winningValue: string | null;
 	declare createdAt: CreationOptional<Date>;
 
 	declare getSession: BelongsToGetAssociationMixin<RaceSessionModel>;
@@ -46,6 +47,7 @@ export class PredictionModel extends Model<
 				},
 				scope: { type: DataTypes.STRING, allowNull: true },
 				closesAt: { type: DataTypes.DATE, allowNull: true, field: "closes_at" },
+				winningValue: { type: DataTypes.STRING, allowNull: true, field: "winning_value" },
 				createdAt: {
 					type: DataTypes.DATE,
 					allowNull: false,

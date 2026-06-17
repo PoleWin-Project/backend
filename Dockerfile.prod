@@ -11,6 +11,7 @@ COPY package*.json ./
 RUN npm install --omit=dev --no-audit --no-fund
 COPY --from=builder /app/dist ./dist
 COPY swagger.yaml ./swagger.yaml
+COPY public ./public
 
 EXPOSE 8000
 ENV NODE_ENV=production

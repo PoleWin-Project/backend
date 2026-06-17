@@ -10,6 +10,8 @@ import {
     UpdatePronosticInput,
 } from "./predictions.dto";
 import { autoResolve, isWinnerForType } from "./predictions.autoresolve";
+import { notifyUser } from "../push/push.service";
+import { emitToUser } from "../../socket/ws.handler";
 
 export class PredictionsService {
     constructor(private readonly repo = new PredictionsRepository()) {}
@@ -195,15 +197,37 @@ export class PredictionsService {
             };
         }
 
-        // 3. Resolve and distribute points
+        // Save winning value to prediction
         const resolvedValue = winningValue;
+        await pred.update({ winningValue: resolvedValue });
+
+        // 3. Resolve and distribute points
         await sequelize.transaction(async (tx) => {
             for (const pronostic of toResolve) {
                 const userValue = pronostic.detail?.value ?? "";
-                const isWinner = userValue
-                    ? isWinnerForType(pred.type, userValue, resolvedValue)
-                    : false;
-                const multiplier   = pronostic.detail?.multiplier ?? 2;
+                
+                let isWinner = false;
+                let multiplier = pronostic.detail?.multiplier ?? 2;
+
+                if (pred.type === 'PODIUM') {
+                    const winningArr = resolvedValue.split(',');
+                    const userArr = userValue.split(',');
+                    const hasSameDrivers = winningArr.length === 3 && userArr.length === 3 && winningArr.every(d => userArr.includes(d));
+                    const isExactOrder = userValue === resolvedValue;
+
+                    if (isExactOrder) {
+                        isWinner = true;
+                        multiplier = 4; // x4 for exact order
+                    } else if (hasSameDrivers) {
+                        isWinner = true;
+                        // base multiplier remains x2
+                    } else {
+                        isWinner = false;
+                    }
+                } else {
+                    isWinner = userValue ? isWinnerForType(pred.type, userValue, resolvedValue) : false;
+                }
+
                 const pointsEarned = isWinner ? Math.floor(pronostic.pointsStaked * multiplier) : 0;
 
                 await pronostic.update(
@@ -220,8 +244,38 @@ export class PredictionsService {
                         );
                     }
                 }
+
+                outcomes.push({
+                    userId: pronostic.userId,
+                    pronosticId: pronostic.id,
+                    value: userValue,
+                    won: isWinner,
+                    pointsEarned,
+                    pointsStaked: pronostic.pointsStaked,
+                });
             }
         });
+
+        // 4. Notifier les utilisateurs (hors transaction : best-effort)
+        for (const o of outcomes) {
+            // Event temps réel (popup in-app)
+            emitToUser(o.userId, "prono:resolved", {
+                pronosticId: o.pronosticId,
+                predictionId,
+                status: o.won ? "won" : "lost",
+                value: o.value,
+                pointsEarned: o.pointsEarned,
+                pointsStaked: o.pointsStaked,
+            });
+            // Push système
+            void notifyUser(o.userId, {
+                title: o.won ? "🏁 Prono gagné !" : "Prono terminé",
+                body: o.won
+                    ? `${o.value} : +${o.pointsEarned} pts remportés !`
+                    : `${o.value} : pas cette fois (-${o.pointsStaked} pts).`,
+                data: { type: "prono", predictionId },
+            });
+        }
 
         return {
             resolved: toResolve.length,

@@ -75,7 +75,7 @@ pipeline {
             steps {
                 script {
                     env.IMAGE_TAG = env.GIT_COMMIT.take(7)
-                    sh "docker build -t ${IMAGE_NAME}:${env.IMAGE_TAG} ."
+                    sh "docker build -f Dockerfile.prod -t ${IMAGE_NAME}:${env.IMAGE_TAG} ."
                 }
             }
         }
