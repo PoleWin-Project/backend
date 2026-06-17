@@ -14,4 +14,5 @@ export { UserBadgeModel } from "./userBadge.model";
 export { FriendRequestModel } from "./friendRequest.model";
 export { DirectMessageModel } from "./directMessage.model";
 export { GamePlayModel } from "./gamePlay.model";
+export { PushTokenModel } from "./pushToken.model";
 export { initModels } from "./initModels";

@@ -10,6 +10,8 @@ import {
     UpdatePronosticInput,
 } from "./predictions.dto";
 import { autoResolve, isWinnerForType } from "./predictions.autoresolve";
+import { notifyUser } from "../push/push.service";
+import { emitToUser } from "../../socket/ws.handler";
 
 export class PredictionsService {
     constructor(private readonly repo = new PredictionsRepository()) {}
@@ -197,6 +199,7 @@ export class PredictionsService {
 
         // 3. Resolve and distribute points
         const resolvedValue = winningValue;
+        const outcomes: { userId: number; pronosticId: number; value: string; won: boolean; pointsEarned: number; pointsStaked: number }[] = [];
         await sequelize.transaction(async (tx) => {
             for (const pronostic of toResolve) {
                 const userValue = pronostic.detail?.value ?? "";
@@ -220,8 +223,38 @@ export class PredictionsService {
                         );
                     }
                 }
+
+                outcomes.push({
+                    userId: pronostic.userId,
+                    pronosticId: pronostic.id,
+                    value: userValue,
+                    won: isWinner,
+                    pointsEarned,
+                    pointsStaked: pronostic.pointsStaked,
+                });
             }
         });
+
+        // 4. Notifier les utilisateurs (hors transaction : best-effort)
+        for (const o of outcomes) {
+            // Event temps réel (popup in-app)
+            emitToUser(o.userId, "prono:resolved", {
+                pronosticId: o.pronosticId,
+                predictionId,
+                status: o.won ? "won" : "lost",
+                value: o.value,
+                pointsEarned: o.pointsEarned,
+                pointsStaked: o.pointsStaked,
+            });
+            // Push système
+            void notifyUser(o.userId, {
+                title: o.won ? "🏁 Prono gagné !" : "Prono terminé",
+                body: o.won
+                    ? `${o.value} : +${o.pointsEarned} pts remportés !`
+                    : `${o.value} : pas cette fois (-${o.pointsStaked} pts).`,
+                data: { type: "prono", predictionId },
+            });
+        }
 
         return {
             resolved: toResolve.length,

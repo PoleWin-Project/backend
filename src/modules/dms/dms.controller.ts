@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { DmsService } from "./dms.service";
 import { ListDmsQuery } from "./dms.dto";
 import { emitToUser } from "../../socket/ws.handler";
+import { notifyUser } from "../push/push.service";
 
 export class DmsController {
     constructor(private readonly service = new DmsService()) {}
@@ -20,6 +21,13 @@ export class DmsController {
                 content:    message.content,
                 isRead:     message.isRead,
                 createdAt:  message.createdAt,
+            });
+
+            // Notification push système
+            void notifyUser(receiverId, {
+                title: "Nouveau message",
+                body: message.content.length > 120 ? `${message.content.slice(0, 117)}...` : message.content,
+                data: { type: "dm", userId: senderId },
             });
 
             res.status(201).json({ status: "ok", message });
