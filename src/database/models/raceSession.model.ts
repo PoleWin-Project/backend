@@ -21,6 +21,7 @@ export class RaceSessionModel extends Model<
 	declare type: string;
 	declare location: string | null;
 	declare dateStart: Date | null;
+	declare startNotifiedAt: CreationOptional<Date | null>;
 
 	declare getPredictions: HasManyGetAssociationsMixin<PredictionModel>;
 	declare getChatChannels: HasManyGetAssociationsMixin<ChatChannelModel>;
@@ -42,6 +43,7 @@ export class RaceSessionModel extends Model<
 				type: { type: DataTypes.STRING, allowNull: false },
 				location: { type: DataTypes.STRING, allowNull: true, field: "location" },
 				dateStart: { type: DataTypes.DATE, allowNull: true, field: "date_start" },
+				startNotifiedAt: { type: DataTypes.DATE, allowNull: true, field: "start_notified_at" },
 			},
 			{
 				sequelize,

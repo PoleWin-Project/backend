@@ -9,6 +9,7 @@ import { connectToDatabase } from "./database/pg.client";
 import { initModels } from "./database/models";
 import { sequelize } from "./database/sequelize";
 import { autoResolveScheduler } from "./modules/predictions/autoresolve.scheduler";
+import { sessionStartScheduler } from "./modules/raceSessions/sessionStart.scheduler";
 import { setupWsServer } from "./socket/ws.handler";
 import { SessionsService } from "./modules/sessions/sessions.service";
 
@@ -33,6 +34,7 @@ async function bootstrap() {
     logger.info("WebSocket server initialized on /ws");
 
     autoResolveScheduler.start();
+    sessionStartScheduler.start();
 
     // Auto-sync sessions depuis OpenF1 si nécessaire (nouveau déploiement ou nouvelle année)
     (async () => {
@@ -59,6 +61,7 @@ async function bootstrap() {
     const shutdown = async (signal: string) => {
         logger.info(`${signal} received — graceful shutdown starting`);
         autoResolveScheduler.stop();
+        sessionStartScheduler.stop();
         httpServer.close(async () => {
             try {
                 await sequelize.close();

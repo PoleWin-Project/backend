@@ -2,6 +2,8 @@ import { UserModel } from "../../database/models";
 import { httpErrors } from "../../common/errors/http";
 import { BadgesRepository } from "./badges.repository";
 import { CreateBadgeInput, UpdateBadgeInput } from "./badges.dto";
+import { notifyUser } from "../push/push.service";
+import { emitToUser } from "../../socket/ws.handler";
 
 export class BadgesService {
     constructor(private readonly repo = new BadgesRepository()) {}
@@ -41,6 +43,15 @@ export class BadgesService {
 
         const { userBadge, created } = await this.repo.awardBadge(userId, badgeId);
         if (!created) throw httpErrors.conflict("User already has this badge");
+
+        // Notifier l'utilisateur du nouveau badge (best-effort)
+        emitToUser(userId, "badge:awarded", { badgeId, name: (badge as any).name });
+        void notifyUser(userId, {
+            title: "🏅 Nouveau badge débloqué !",
+            body: (badge as any).name ? `Tu as obtenu : ${(badge as any).name}` : "Tu as débloqué un nouveau badge.",
+            data: { type: "badge", badgeId },
+        });
+
         return userBadge;
     }
 

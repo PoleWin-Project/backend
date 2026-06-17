@@ -6,7 +6,7 @@ const isProd = process.env.NODE_ENV === "production";
 const EnvSchema = z.object({
     PORT:                   z.coerce.number().int().positive().default(8000),
     DATABASE_URL:           z.string().min(1, "DATABASE_URL is required"),
-    CORS_ORIGIN:            z.string().default("http://localhost:3000"),
+    CORS_ORIGIN:            z.string().default("http://localhost:8081"),
     NODE_ENV:               z.enum(["development", "test", "production"]).default("development"),
 
     // JWT — secrets must be distinct in production

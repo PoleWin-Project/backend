@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { FriendsService } from "./friends.service";
 import { emitToUser } from "../../socket/ws.handler";
+import { notifyUser } from "../push/push.service";
 
 export class FriendsController {
     constructor(private readonly service = new FriendsService()) {}
@@ -32,8 +33,17 @@ export class FriendsController {
             if (request && request.senderId) {
                 emitToUser(request.senderId, "friend:status_changed", { userId: userId });
                 emitToUser(userId, "friend:status_changed", { userId: request.senderId });
+
+                // Push système : prévenir l'expéditeur que sa demande est acceptée
+                if (action === "accept") {
+                    void notifyUser(request.senderId, {
+                        title: "Nouvelle relation",
+                        body: "Ta demande d'ami a été acceptée 🎉",
+                        data: { type: "friend", userId },
+                    });
+                }
             }
-            
+
             res.json({ status: "ok", request });
         } catch (e) { next(e); }
     };

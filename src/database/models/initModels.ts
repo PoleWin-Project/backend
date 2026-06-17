@@ -16,6 +16,7 @@ import { BadgeModel } from "./badge.model";
 import { BadgeRuleModel } from "./badgeRule.model";
 import { UserBadgeModel } from "./userBadge.model";
 import { GamePlayModel } from "./gamePlay.model";
+import { PushTokenModel } from "./pushToken.model";
 
 export function initModels(sequelize: Sequelize) {
 
@@ -35,6 +36,7 @@ export function initModels(sequelize: Sequelize) {
 	BadgeRuleModel.initModel(sequelize);
 	UserBadgeModel.initModel(sequelize);
 	GamePlayModel.initModel(sequelize);
+	PushTokenModel.initModel(sequelize);
 
 	UserModel.hasOne(ProfileModel, { as: "profile", foreignKey: "userId" });
 	ProfileModel.belongsTo(UserModel, { as: "user", foreignKey: "userId" });
@@ -91,6 +93,9 @@ export function initModels(sequelize: Sequelize) {
 	UserModel.hasMany(GamePlayModel, { as: "gamePlays", foreignKey: "userId" });
 	GamePlayModel.belongsTo(UserModel, { as: "user", foreignKey: "userId" });
 
+	UserModel.hasMany(PushTokenModel, { as: "pushTokens", foreignKey: "userId" });
+	PushTokenModel.belongsTo(UserModel, { as: "user", foreignKey: "userId" });
+
 	return {
 		UserModel,
 		ProfileModel,
@@ -108,5 +113,6 @@ export function initModels(sequelize: Sequelize) {
 		BadgeRuleModel,
 		UserBadgeModel,
 		GamePlayModel,
+		PushTokenModel,
 	};
 }
