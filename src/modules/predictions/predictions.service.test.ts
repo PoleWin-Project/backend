@@ -199,7 +199,7 @@ describe("PredictionsService", () => {
     // ── resolve ─────────────────────────────────────────────────────────────────
 
     describe("resolve", () => {
-        const fakePred = { id: 1, type: "RACE_WINNER", session: { idCourseExternal: 9000 } } as any;
+        const fakePred = { id: 1, type: "RACE_WINNER", session: { idCourseExternal: 9000 }, update: jest.fn().mockResolvedValue({}) } as any;
 
         const makePronostic = (value: string) => ({
             userId:      1,
@@ -228,6 +228,66 @@ describe("PredictionsService", () => {
             );
             expect(fakeProfile.update).toHaveBeenCalledWith({ points: 200 }, { transaction: {} });
             expect(result).toMatchObject({ resolved: 2, winningValue: "VER" });
+        });
+
+        // Test : Un pronostic PODIUM avec le bon ordre exact applique le multiplicateur x4
+        it("resolves PODIUM with exact order (x4 multiplier)", async () => {
+            const predPodium = { id: 2, type: "PODIUM", session: { idCourseExternal: 9000 }, update: jest.fn().mockResolvedValue({}) } as any;
+            const exactWinner = makePronostic("VER,HAM,LEC");
+            const fakeProfile = { points: 0, update: jest.fn().mockResolvedValue({}) } as any;
+
+            mockRepo.findById.mockResolvedValue(predPodium);
+            mockRepo.findAllPronosticsForPrediction.mockResolvedValue([exactWinner] as any);
+            mockRepo.findProfileByUserId.mockResolvedValue(fakeProfile);
+
+            const result = await service.resolve(2, { winningValue: "VER,HAM,LEC" });
+
+            // 100 points misés * 4 (multiplicateur pour l'ordre exact) = 400 points gagnés
+            expect(exactWinner.update).toHaveBeenCalledWith(
+                { status: "won", pointsEarned: 400 }, { transaction: {} },
+            );
+            expect(fakeProfile.update).toHaveBeenCalledWith({ points: 400 }, { transaction: {} });
+            expect(result).toMatchObject({ resolved: 1, winningValue: "VER,HAM,LEC" });
+        });
+
+        // Test : Un pronostic PODIUM avec les bons pilotes mais dans le désordre applique le multiplicateur standard x2
+        it("resolves PODIUM with out-of-order drivers (x2 multiplier)", async () => {
+            const predPodium = { id: 2, type: "PODIUM", session: { idCourseExternal: 9000 }, update: jest.fn().mockResolvedValue({}) } as any;
+            const partialWinner = makePronostic("HAM,LEC,VER");
+            const fakeProfile = { points: 0, update: jest.fn().mockResolvedValue({}) } as any;
+
+            mockRepo.findById.mockResolvedValue(predPodium);
+            mockRepo.findAllPronosticsForPrediction.mockResolvedValue([partialWinner] as any);
+            mockRepo.findProfileByUserId.mockResolvedValue(fakeProfile);
+
+            const result = await service.resolve(2, { winningValue: "VER,HAM,LEC" });
+
+            // 100 points misés * 2 (multiplicateur de base conservé) = 200 points gagnés
+            expect(partialWinner.update).toHaveBeenCalledWith(
+                { status: "won", pointsEarned: 200 }, { transaction: {} },
+            );
+            expect(fakeProfile.update).toHaveBeenCalledWith({ points: 200 }, { transaction: {} });
+            expect(result).toMatchObject({ resolved: 1, winningValue: "VER,HAM,LEC" });
+        });
+
+        // Test : Un pronostic PODIUM est totalement perdu s'il manque au moins un des 3 pilotes
+        it("fails PODIUM if one driver is incorrect", async () => {
+            const predPodium = { id: 2, type: "PODIUM", session: { idCourseExternal: 9000 }, update: jest.fn().mockResolvedValue({}) } as any;
+            const loser = makePronostic("VER,HAM,NOR"); // NOR instead of LEC
+            const fakeProfile = { points: 0, update: jest.fn().mockResolvedValue({}) } as any;
+
+            mockRepo.findById.mockResolvedValue(predPodium);
+            mockRepo.findAllPronosticsForPrediction.mockResolvedValue([loser] as any);
+            mockRepo.findProfileByUserId.mockResolvedValue(fakeProfile);
+
+            const result = await service.resolve(2, { winningValue: "VER,HAM,LEC" });
+
+            // Le pronostic est perdu, 0 point gagné
+            expect(loser.update).toHaveBeenCalledWith(
+                { status: "lost", pointsEarned: 0 }, { transaction: {} },
+            );
+            expect(fakeProfile.update).not.toHaveBeenCalled();
+            expect(result).toMatchObject({ resolved: 1, winningValue: "VER,HAM,LEC" });
         });
 
         it("sets awaiting_verification when auto-resolve returns null", async () => {
