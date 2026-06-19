@@ -78,6 +78,9 @@ export class AuthService {
                     profile: {
                         favoriteTeamCode: null,
                         favoriteDriverCode: null,
+                        bio: null,
+                        avatarUrl: null,
+                        displayName: null,
                     }
                 },
             };
@@ -134,6 +137,9 @@ export class AuthService {
                 profile: {
                     favoriteTeamCode: user.profile?.favoriteTeamCode ?? null,
                     favoriteDriverCode: user.profile?.favoriteDriverCode ?? null,
+                    bio: user.profile?.bio ?? null,
+                    avatarUrl: user.profile?.avatarUrl ?? null,
+                    displayName: user.profile?.displayName ?? null,
                 }
             },
         };
@@ -273,6 +279,9 @@ export class AuthService {
                 profile: {
                     favoriteTeamCode: user.profile?.favoriteTeamCode ?? null,
                     favoriteDriverCode: user.profile?.favoriteDriverCode ?? null,
+                    bio: user.profile?.bio ?? null,
+                    avatarUrl: user.profile?.avatarUrl ?? null,
+                    displayName: user.profile?.displayName ?? null,
                 }
             },
         };
