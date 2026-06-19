@@ -26,7 +26,7 @@ async function bootstrap() {
     await sequelize.authenticate();
     logger.info("Database connection established");
 
-    const app        = createApp();
+    const app = createApp();
     const httpServer = createServer(app);
 
     // Native WebSocket server for real-time DMs
@@ -56,6 +56,16 @@ async function bootstrap() {
 
     httpServer.listen(env.port, () => {
         logger.info(`Server listening on http://localhost:${env.port}`);
+
+        // Auto-ping pour empêcher la mise en veille sur Render 
+        // S'exécute toutes les 10 minutes si une URL publique est détectée
+        const renderUrl = process.env.RENDER_EXTERNAL_URL;
+        if (renderUrl) {
+            logger.info(`Auto-ping activé sur ${renderUrl} (toutes les 10 min)`);
+            setInterval(() => {
+                fetch(`${renderUrl}/health`).catch(() => { });
+            }, 10 * 60 * 1000);
+        }
     });
 
     const shutdown = async (signal: string) => {
@@ -79,7 +89,7 @@ async function bootstrap() {
     };
 
     process.on("SIGTERM", () => shutdown("SIGTERM"));
-    process.on("SIGINT",  () => shutdown("SIGINT"));
+    process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 bootstrap().catch((err) => {
