@@ -3,6 +3,7 @@ import { DmsService } from "./dms.service";
 import { ListDmsQuery } from "./dms.dto";
 import { emitToUser } from "../../socket/ws.handler";
 import { notifyUser } from "../push/push.service";
+import { UserModel } from "../../database/models";
 
 export class DmsController {
     constructor(private readonly service = new DmsService()) {}
@@ -23,9 +24,11 @@ export class DmsController {
                 createdAt:  message.createdAt,
             });
 
-            // Notification push système
+            // Notification push système — titre = nom de l'expéditeur (façon messagerie).
+            const sender = await UserModel.findByPk(senderId, { attributes: ["username"] });
+            const senderName = sender?.username ?? "Nouveau message";
             void notifyUser(receiverId, {
-                title: "Nouveau message",
+                title: senderName,
                 body: message.content.length > 120 ? `${message.content.slice(0, 117)}...` : message.content,
                 data: { type: "dm", userId: senderId },
             });

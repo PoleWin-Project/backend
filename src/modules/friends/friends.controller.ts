@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { FriendsService } from "./friends.service";
 import { emitToUser } from "../../socket/ws.handler";
 import { notifyUser } from "../push/push.service";
+import { UserModel } from "../../database/models";
 
 export class FriendsController {
     constructor(private readonly service = new FriendsService()) {}
@@ -11,11 +12,30 @@ export class FriendsController {
             const senderId    = req.user!.id;
             const receiverId  = Number(req.body.receiverId);
             const request = await this.service.sendRequest(senderId, receiverId);
-            
+
             // Notify both users that friendship status changed
             emitToUser(receiverId, "friend:status_changed", { userId: senderId });
             emitToUser(senderId, "friend:status_changed", { userId: receiverId });
-            
+
+            // Push système : prévenir le destinataire de la demande reçue.
+            const sender = await UserModel.findByPk(senderId, { attributes: ["username"] });
+            const senderName = sender?.username ?? "Quelqu'un";
+            if (request?.status === "accepted") {
+                // L'autre avait déjà envoyé une demande → auto-acceptée.
+                // On prévient l'expéditeur d'origine (= receiverId) que c'est validé.
+                void notifyUser(receiverId, {
+                    title: "Nouvelle relation 🎉",
+                    body: `${senderName} a accepté ta demande d'ami`,
+                    data: { type: "friend", userId: senderId },
+                });
+            } else if (request) {
+                void notifyUser(receiverId, {
+                    title: "Nouvelle demande d'ami 👋",
+                    body: `${senderName} souhaite t'ajouter en ami`,
+                    data: { type: "friend", userId: senderId },
+                });
+            }
+
             res.status(201).json({ status: "ok", request });
         } catch (e) { next(e); }
     };
