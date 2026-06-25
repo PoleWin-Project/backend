@@ -15,6 +15,7 @@ export class GamePlayModel extends Model<
     declare userId:   number;
     declare gameId:   string;
     declare points:   number;
+    declare metricMs: CreationOptional<number | null>;
     declare playedAt: CreationOptional<Date>;
 
     static initModel(sequelize: Sequelize) {
@@ -24,6 +25,7 @@ export class GamePlayModel extends Model<
                 userId: { type: DataTypes.INTEGER, allowNull: false, field: "user_id" },
                 gameId: { type: DataTypes.STRING(64), allowNull: false, field: "game_id" },
                 points: { type: DataTypes.INTEGER, allowNull: false },
+                metricMs: { type: DataTypes.INTEGER, allowNull: true, field: "metric_ms" },
                 playedAt: {
                     type: DataTypes.DATE,
                     allowNull: false,
