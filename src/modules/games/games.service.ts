@@ -39,6 +39,36 @@ export class GamesService {
         };
     }
 
+    /**
+     * Enregistre un faux départ : compte comme une partie (décompte le quota
+     * journalier) mais ne rapporte aucun point et n'entre pas au classement.
+     * Empêche les joueurs de relancer à l'infini pour "pre-shoot" le vert.
+     */
+    async recordFalseStart(userId: number, gameId: string, isAdmin: boolean) {
+        if (!isAdmin) {
+            const played = await this.countPlaysToday(userId, gameId);
+            if (played >= DAILY_LIMIT) {
+                throw httpErrors.forbidden(
+                    `Limite journalière atteinte (${DAILY_LIMIT} parties/jour). Reviens demain !`
+                );
+            }
+        }
+
+        await GamePlayModel.create({
+            userId,
+            gameId,
+            points: 0,
+            metricMs: null,
+            playedAt: new Date(),
+        });
+
+        const playsToday = await this.countPlaysToday(userId, gameId);
+        return {
+            playsToday,
+            playsLeft: isAdmin ? null : DAILY_LIMIT - playsToday,
+        };
+    }
+
     async rewardUser(userId: number, points: number, gameId: string, isAdmin: boolean, metricMs?: number | null) {
         if (points <= 0)   throw httpErrors.badRequest("Invalid points amount");
         if (points > 100)  throw httpErrors.badRequest("Max reward per game exceeded");

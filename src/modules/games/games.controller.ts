@@ -17,6 +17,24 @@ export class GamesController {
         }
     };
 
+    falseStart = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const user    = (req as any).user;
+            const isAdmin = Array.isArray(user?.roles) && user.roles.includes("admin");
+            const { gameId } = req.body;
+
+            if (!gameId) {
+                res.status(400).json({ status: "error", message: "gameId is required" });
+                return;
+            }
+
+            const result = await this.service.recordFalseStart(user.id, gameId, isAdmin);
+            res.status(200).json({ status: "success", ...result });
+        } catch (e) {
+            next(e);
+        }
+    };
+
     playsToday = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const user    = (req as any).user;
