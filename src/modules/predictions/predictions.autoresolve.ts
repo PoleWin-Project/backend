@@ -1,5 +1,5 @@
 import { openf1Client } from "../../common/clients/openf1.client";
-import { OpenF1Driver, OpenF1Position, OpenF1Lap, OpenF1RaceControl } from "../openf1/openf1.types";
+import { OpenF1Driver, OpenF1Position, OpenF1Lap, OpenF1RaceControl, OpenF1Session } from "../openf1/openf1.types";
 import { PREDICTION_TYPES } from "./predictions.dto";
 
 type PredictionType = (typeof PREDICTION_TYPES)[number];
@@ -26,12 +26,22 @@ async function getFinalPositions(sessionKey: number): Promise<{ driverNumber: nu
     }));
 }
 
+async function isSessionFinished(sessionKey: number): Promise<boolean> {
+    const sessions = await openf1Client.get<OpenF1Session[]>("/sessions", { session_key: sessionKey });
+    const session = sessions[0];
+    if (!session?.date_end) return false;
+    return new Date(session.date_end) < new Date();
+}
+
 /**
  * All 3 supported types resolve the same way: P1 at end of session → driver acronym.
  * Returns null if data is unavailable or the session has not finished yet.
  */
 export async function autoResolve(type: PredictionType, sessionKey: number): Promise<string | null> {
     try {
+        const finished = await isSessionFinished(sessionKey);
+        if (!finished) return null;
+
         switch (type) {
             case "RACE_WINNER":
             case "SPRINT_WINNER": {
