@@ -27,22 +27,24 @@ export class LeaderboardService {
 
     // ── Global ────────────────────────────────────────────────────────────────
 
-    async getGlobal(limit: number, afterPoints?: number, afterUserId?: number) {
+    async getGlobal(limit: number, afterPoints?: number, afterUserId?: number, page?: number, sort: "points" | "winRate" | "netGain" = "points") {
         let rankOffset = 0;
 
-        if (afterPoints !== undefined && afterUserId !== undefined) {
+        if (page) {
+            rankOffset = (page - 1) * limit;
+        } else if (afterPoints !== undefined && afterUserId !== undefined && sort === "points") {
             rankOffset = await this.repo.countGlobalBefore(afterPoints, afterUserId);
         }
 
         const [rows, total] = await Promise.all([
-            this.repo.findGlobalPage(limit + 1, afterPoints, afterUserId),
+            this.repo.findGlobalPage(limit + 1, afterPoints, afterUserId, page, sort),
             this.repo.countGlobal(),
         ]);
 
         const hasMore    = rows.length > limit;
         const items      = hasMore ? rows.slice(0, limit) : rows;
         const last       = items[items.length - 1];
-        const nextCursor = hasMore ? encodeCursor({ p: last.points, u: last.userId }) : null;
+        const nextCursor = hasMore && sort === "points" ? encodeCursor({ p: last.points, u: last.userId }) : null;
 
         return {
             items: items.map((p, i) => ({
@@ -52,6 +54,8 @@ export class LeaderboardService {
                 displayName: p.displayName,
                 avatarUrl:   p.avatarUrl,
                 points:      p.points,
+                winRate:     Number(p.getDataValue('winRate' as any) ?? 0),
+                netGain:     Number(p.getDataValue('netGain' as any) ?? 0),
             })),
             nextCursor,
             total,

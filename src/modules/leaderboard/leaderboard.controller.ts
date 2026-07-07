@@ -29,9 +29,9 @@ export class LeaderboardController {
 
     getGlobal = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const { limit, cursor } = req.query as unknown as LeaderboardQuery;
+            const { limit, cursor, page, sort } = req.query as unknown as LeaderboardQuery;
             const c    = parseGlobalCursor(cursor);
-            const data = await this.service.getGlobal(limit, c?.p, c?.u);
+            const data = await this.service.getGlobal(limit, c?.p, c?.u, page, sort);
             res.json({ status: "ok", ...data });
         } catch (e) {
             next(e);

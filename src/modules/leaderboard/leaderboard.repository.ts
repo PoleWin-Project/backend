@@ -22,21 +22,49 @@ export class LeaderboardRepository {
 
     // ── Global ────────────────────────────────────────────────────────────────
 
-    findGlobalPage(limit: number, afterPoints?: number, afterUserId?: number) {
+    findGlobalPage(limit: number, afterPoints?: number, afterUserId?: number, page?: number, sort: "points" | "winRate" | "netGain" = "points") {
         const where: any = {};
+        const attributes: any = { include: [] };
+        const order: any[] = [];
+        let offset: number | undefined;
 
-        if (afterPoints !== undefined && afterUserId !== undefined) {
-            where[Op.or as any] = [
-                { points: { [Op.lt]: afterPoints } },
-                { points: afterPoints, userId: { [Op.gt]: afterUserId } },
-            ];
+        if (page) {
+            offset = (page - 1) * limit;
+        }
+
+        if (sort === "netGain") {
+            attributes.include.push([
+                sequelize.literal(`(SELECT COALESCE(SUM(points_earned), 0) - COALESCE(SUM(points_staked), 0) FROM pronostics WHERE pronostics.user_id = "ProfileModel"."user_id")`),
+                'netGain'
+            ]);
+            order.push([sequelize.literal('"netGain"'), "DESC"]);
+            order.push(["userId", "ASC"]);
+        } else if (sort === "winRate") {
+            attributes.include.push([
+                sequelize.literal(`(SELECT CASE WHEN COUNT(*) = 0 THEN 0 ELSE ROUND((COUNT(CASE WHEN status = 'won' THEN 1 END) * 100.0) / COUNT(*)) END FROM pronostics WHERE pronostics.user_id = "ProfileModel"."user_id" AND status IN ('won', 'lost'))`),
+                'winRate'
+            ]);
+            order.push([sequelize.literal('"winRate"'), "DESC"]);
+            order.push(["points", "DESC"]);
+            order.push(["userId", "ASC"]);
+        } else {
+            order.push(["points", "DESC"]);
+            order.push(["userId", "ASC"]);
+            if (!page && afterPoints !== undefined && afterUserId !== undefined) {
+                where[Op.or as any] = [
+                    { points: { [Op.lt]: afterPoints } },
+                    { points: afterPoints, userId: { [Op.gt]: afterUserId } },
+                ];
+            }
         }
 
         return ProfileModel.findAll({
             where,
+            attributes,
             include: [{ model: UserModel, as: "user", attributes: ["id", "username"] }],
-            order: [["points", "DESC"], ["userId", "ASC"]],
+            order,
             limit,
+            offset,
         });
     }
 
