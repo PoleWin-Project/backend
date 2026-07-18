@@ -165,9 +165,14 @@ export class PredictionsService {
         if (!pred) throw httpErrors.notFound("Prediction not found");
 
         const pronostics = await this.repo.findAllPronosticsForPrediction(predictionId);
-        // Include previously unresolved pronostics on retry
+        // Pronostics à (re)résoudre. En mode `force` (correction admin d'un résultat
+        // erroné), on ré-inclut aussi les pronostics déjà "won"/"lost" : leurs points
+        // déjà crédités seront annulés avant d'appliquer le nouveau résultat.
         const toResolve = pronostics.filter(
-            (p) => p.status === "submitted" || p.status === "awaiting_verification",
+            (p) =>
+                p.status === "submitted" ||
+                p.status === "awaiting_verification" ||
+                (input.force && (p.status === "won" || p.status === "lost")),
         );
 
         // 1. Determine winning value: manual override → auto-resolve → awaiting
@@ -212,8 +217,21 @@ export class PredictionsService {
         }[] = [];
         await sequelize.transaction(async (tx) => {
             for (const pronostic of toResolve) {
+                // Re-résolution : annuler d'abord les gains déjà crédités pour ce
+                // pronostic (sinon on double-compterait). La mise (pointsStaked) a été
+                // débitée au placement et n'est pas restituée aux perdants.
+                if (pronostic.status === "won" && (pronostic.pointsEarned ?? 0) > 0) {
+                    const prevProfile = await this.repo.findProfileByUserId(pronostic.userId, tx);
+                    if (prevProfile) {
+                        await prevProfile.update(
+                            { points: prevProfile.points - (pronostic.pointsEarned ?? 0) },
+                            { transaction: tx },
+                        );
+                    }
+                }
+
                 const userValue = pronostic.detail?.value ?? "";
-                
+
                 let isWinner = false;
                 let multiplier = pronostic.detail?.multiplier ?? 2;
 

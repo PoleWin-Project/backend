@@ -26,11 +26,17 @@ async function getFinalPositions(sessionKey: number): Promise<{ driverNumber: nu
     }));
 }
 
+// Délai de stabilisation après la fin officielle : OpenF1 continue d'ingérer les
+// derniers tours / le classement final quelques minutes après `date_end`. Résoudre
+// trop tôt fige un résultat PROVISOIRE (ex. pole attribuée au leader intermédiaire
+// avant que le tour de pole ne soit propagé). On attend que les données se figent.
+const RESULT_SETTLE_MS = 10 * 60 * 1000; // 10 min
+
 async function isSessionFinished(sessionKey: number): Promise<boolean> {
     const sessions = await openf1Client.get<OpenF1Session[]>("/sessions", { session_key: sessionKey });
     const session = sessions[0];
     if (!session?.date_end) return false;
-    return new Date(session.date_end) < new Date();
+    return new Date(session.date_end).getTime() + RESULT_SETTLE_MS < Date.now();
 }
 
 /**
@@ -52,6 +58,20 @@ export async function autoResolve(type: PredictionType, sessionKey: number): Pro
                 return map.get(p1.driverNumber) ?? null;
             }
             case "POLE_POSITION": {
+                // Source officielle d'abord : le classement final de la qualif (P1 = pole).
+                // Il tient compte des tours SUPPRIMÉS (dépassement de limites de piste),
+                // contrairement au « meilleur temps brut » des /laps qui peut désigner
+                // un pilote dont le meilleur tour a été annulé.
+                const finalPositions = await getFinalPositions(sessionKey);
+                const pole = finalPositions.find((p) => p.position === 1);
+                if (pole) {
+                    const officialMap = await getDriverAcronymMap(sessionKey);
+                    const officialAcr = officialMap.get(pole.driverNumber);
+                    if (officialAcr) return officialAcr;
+                }
+
+                // Fallback : heuristique « meilleur tour de Q3 » si le classement
+                // /position est indisponible.
                 const laps = await openf1Client.get<OpenF1Lap[]>("/laps", { session_key: sessionKey });
                 const validLaps = laps.filter((l) => l.lap_duration !== null && !l.is_pit_out_lap);
                 if (!validLaps.length) return null;
