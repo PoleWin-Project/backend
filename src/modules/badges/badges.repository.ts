@@ -1,9 +1,28 @@
-import { BadgeModel, UserBadgeModel } from "../../database/models";
+import { fn, col } from "sequelize";
+import { BadgeModel, UserBadgeModel, UserModel } from "../../database/models";
 import { CreateBadgeInput, UpdateBadgeInput } from "./badges.dto";
 
 export class BadgesRepository {
     findAll() {
         return BadgeModel.findAll({ order: [["createdAt", "ASC"]] });
+    }
+
+    /** Nombre de détenteurs par badge. */
+    async countHoldersByBadge(): Promise<{ badgeId: number; count: number }[]> {
+        const rows = await UserBadgeModel.findAll({
+            attributes: ["badgeId", [fn("COUNT", col("user_id")), "count"]],
+            group: ["badgeId"],
+            raw: true,
+        });
+        return (rows as unknown as { badgeId: number; count: number | string }[]).map((r) => ({
+            badgeId: Number(r.badgeId),
+            count: Number(r.count),
+        }));
+    }
+
+    /** Nombre total d'utilisateurs (dénominateur du pourcentage). */
+    countUsers(): Promise<number> {
+        return UserModel.count();
     }
 
     findById(id: number) {
