@@ -38,6 +38,9 @@ export type UpdatePronosticInput = z.infer<typeof UpdatePronosticDto>;
 
 export const ResolveDto = z.object({
     winningValue: z.string().min(1).max(500).optional(),
+    // Re-résolution admin : recalcule aussi les pronostics déjà "won"/"lost"
+    // (corrige un résultat erroné en annulant les points déjà crédités).
+    force: z.boolean().optional(),
 });
 
 export type ResolveInput = z.infer<typeof ResolveDto>;

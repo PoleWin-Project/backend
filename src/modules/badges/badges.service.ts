@@ -8,8 +8,24 @@ import { emitToUser } from "../../socket/ws.handler";
 export class BadgesService {
     constructor(private readonly repo = new BadgesRepository()) {}
 
-    getAllBadges() {
-        return this.repo.findAll();
+    /**
+     * Catalogue de badges enrichi du taux de possession :
+     * `ownedCount` (détenteurs) et `ownedPct` (% des utilisateurs).
+     */
+    async getAllBadges() {
+        const [badges, holders, totalUsers] = await Promise.all([
+            this.repo.findAll(),
+            this.repo.countHoldersByBadge(),
+            this.repo.countUsers(),
+        ]);
+
+        const holderMap = new Map(holders.map((h) => [h.badgeId, h.count]));
+
+        return badges.map((b) => {
+            const ownedCount = holderMap.get(b.id) ?? 0;
+            const ownedPct = totalUsers > 0 ? Math.round((ownedCount / totalUsers) * 100) : 0;
+            return { ...b.toJSON(), ownedCount, ownedPct };
+        });
     }
 
     createBadge(data: CreateBadgeInput) {

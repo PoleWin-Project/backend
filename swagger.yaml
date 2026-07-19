@@ -45,6 +45,8 @@ tags:
       description: Messages des canaux de chat
     - name: Leaderboard
       description: Classements globaux, par league et par session de pronostic
+    - name: DriverDle
+      description: "Driver Guess — mini-jeu quotidien : devine le pilote F1 du jour (façon Wordle)"
 
 paths:
 
@@ -2586,6 +2588,73 @@ paths:
                 "404":
                     $ref: "#/components/responses/NotFound"
 
+    # ── DriverDle ──────────────────────────────────────────────────────────────
+
+    /api/v1/driver-dle/roster:
+        get:
+            tags: [DriverDle]
+            summary: Roster des pilotes pour l'autocomplete
+            description: >
+                Liste des pilotes de la grille actuelle (id, nom, écurie, numéro,
+                nationalité, photo) utilisée par l'autocomplete du jeu.
+                Ne révèle pas le pilote du jour.
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: Roster des pilotes
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    roster:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/DriverDleRosterEntry"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+
+    /api/v1/driver-dle/guess:
+        post:
+            tags: [DriverDle]
+            summary: Soumettre une tentative
+            description: >
+                Devine le pilote du jour (façon Wordle). Retourne un feedback
+                attribut par attribut (écurie, nationalité, année de début en F1,
+                victoires, podiums). Quota : 1 partie/jour, max 6 essais.
+                En cas de victoire, crédite des points dégressifs selon le nombre d'essais.
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [driverId]
+                            properties:
+                                driverId:
+                                    type: string
+                                    description: Identifiant du pilote deviné (voir /driver-dle/roster)
+                                    example: "1"
+            responses:
+                "200":
+                    description: Résultat de la tentative
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/DriverDleGuessResult"
+                "400":
+                    description: driverId manquant ou pilote inconnu
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    description: Quota journalier atteint (déjà joué aujourd'hui)
+
 # ─── Components ───────────────────────────────────────────────────────────────
 
 components:
@@ -2639,6 +2708,62 @@ components:
                         $ref: "#/components/schemas/ErrorResponse"
 
     schemas:
+
+        # ── DriverDle ─────────────────────────────────────────────────────────
+
+        DriverDleRosterEntry:
+            type: object
+            properties:
+                driverId:     { type: string, example: "1" }
+                fullName:     { type: string, example: "Max VERSTAPPEN" }
+                teamName:     { type: string, example: "Red Bull Racing" }
+                driverNumber: { type: integer, example: 1 }
+                nationality:  { type: string, example: "Dutch" }
+                headshotUrl:  { type: string, nullable: true }
+            required: [driverId, fullName, teamName, driverNumber, nationality]
+
+        DriverDleCategoricalFeedback:
+            type: object
+            properties:
+                value:  { type: string }
+                status: { type: string, enum: [exact, wrong] }
+
+        DriverDleNumericFeedback:
+            type: object
+            properties:
+                value:  { type: integer }
+                status: { type: string, enum: [exact, higher, lower] }
+
+        DriverDleGuessFeedback:
+            type: object
+            properties:
+                driverId:             { type: string }
+                fullName:             { type: string }
+                headshotUrl:          { type: string, nullable: true }
+                team:                 { $ref: "#/components/schemas/DriverDleCategoricalFeedback" }
+                nationality:          { $ref: "#/components/schemas/DriverDleCategoricalFeedback" }
+                debutYear:            { $ref: "#/components/schemas/DriverDleNumericFeedback" }
+                wins:                 { $ref: "#/components/schemas/DriverDleNumericFeedback" }
+                podiums:              { $ref: "#/components/schemas/DriverDleNumericFeedback" }
+
+        DriverDleGuessResult:
+            type: object
+            properties:
+                status:       { type: string, example: success }
+                found:        { type: boolean }
+                gameOver:     { type: boolean }
+                attemptsUsed: { type: integer, example: 3 }
+                maxAttempts:  { type: integer, example: 6 }
+                feedback:     { $ref: "#/components/schemas/DriverDleGuessFeedback" }
+                solution:
+                    allOf:
+                        - $ref: "#/components/schemas/DriverDleRosterEntry"
+                    nullable: true
+                    description: Renseigné uniquement quand la partie est terminée
+                pointsEarned:
+                    type: integer
+                    nullable: true
+                    description: Points gagnés (uniquement en cas de victoire)
 
         # ── Sessions ──────────────────────────────────────────────────────────
 
