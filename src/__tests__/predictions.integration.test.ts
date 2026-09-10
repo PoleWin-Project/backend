@@ -1,18 +1,18 @@
 jest.mock("../modules/predictions/predictions.service", () => ({
     PredictionsService: jest.fn().mockImplementation(function (this: any) {
-        this.getBySession                 = jest.fn();
-        this.getById                      = jest.fn();
-        this.create                       = jest.fn();
-        this.update                       = jest.fn();
-        this.delete                       = jest.fn();
-        this.placePronostic               = jest.fn();
-        this.updatePronostic              = jest.fn();
-        this.cancelPronostic              = jest.fn();
-        this.getMyPronostic               = jest.fn();
-        this.listMyPronostics             = jest.fn();
-        this.getMyPronosticsForSession    = jest.fn();
+        this.getBySession = jest.fn();
+        this.getById = jest.fn();
+        this.create = jest.fn();
+        this.update = jest.fn();
+        this.delete = jest.fn();
+        this.placePronostic = jest.fn();
+        this.updatePronostic = jest.fn();
+        this.cancelPronostic = jest.fn();
+        this.getMyPronostic = jest.fn();
+        this.listMyPronostics = jest.fn();
+        this.getMyPronosticsForSession = jest.fn();
         this.getAllPronosticsForPrediction = jest.fn();
-        this.resolve                      = jest.fn();
+        this.resolve = jest.fn();
     }),
 }));
 
@@ -49,26 +49,26 @@ function buildApp(user?: { id: number; roles: string[] }) {
 }
 
 const appPublic = buildApp();
-const appUser   = buildApp({ id: 1, roles: ["user"] });
-const appAdmin  = buildApp({ id: 1, roles: ["admin"] });
+const appUser = buildApp({ id: 1, roles: ["user"] });
+const appAdmin = buildApp({ id: 1, roles: ["admin"] });
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
 const fakePrediction = {
-    id:               1,
-    sessionId:        10,
-    type:             "RACE_WINNER",
-    closesAt:         null,
+    id: 1,
+    sessionId: 10,
+    type: "RACE_WINNER",
+    closesAt: null,
     defaultMultiplier: 2,
 };
 
 const fakePronostic = {
-    id:           1,
-    userId:       1,
+    id: 1,
+    userId: 1,
     predictionId: 1,
     pointsStaked: 50,
-    status:       "submitted",
-    detail:       { value: "VER", multiplier: 2 },
+    status: "submitted",
+    detail: { value: "VER", multiplier: 2 },
 };
 
 // ── Public routes ─────────────────────────────────────────────────────────────

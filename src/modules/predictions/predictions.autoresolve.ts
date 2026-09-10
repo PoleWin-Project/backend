@@ -153,11 +153,10 @@ export async function autoResolve(type: PredictionType, sessionKey: number): Pro
                 const events = await openf1Client.get<OpenF1RaceControl[]>("/race_control", {
                     session_key: sessionKey,
                 });
-                const hasSC = events.some(
-                    (e) =>
-                        e.message?.toUpperCase().includes("SAFETY CAR") ||
-                        e.flag === "SC",
-                );
+                const hasSC = events.some((e) => {
+                    const msg = e.message?.toUpperCase() || "";
+                    return (msg.includes("SAFETY CAR") && !msg.includes("VIRTUAL")) || e.flag === "SC";
+                });
                 return hasSC ? "YES" : "NO";
             }
 
