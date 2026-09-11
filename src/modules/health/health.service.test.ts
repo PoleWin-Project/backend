@@ -33,5 +33,5 @@ describe("health.service — getHealth()", () => {
         expect(new Date(timestamp).toISOString()).toBe(timestamp);
     });
 
-    
+
 });

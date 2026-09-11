@@ -1,4 +1,4 @@
-jest.mock("../../common/clients/openf1.client");
+jest.mock("../common/clients/openf1.client");
 
 import { openf1Client } from "../common/clients/openf1.client";
 import { autoResolve } from "../modules/predictions/predictions.autoresolve";
@@ -354,6 +354,19 @@ describe("autoResolve — SAFETY_CAR", () => {
 
         const result = await autoResolve("SAFETY_CAR", SESSION_KEY);
         expect(result).toBe("YES");
+    });
+
+    it("retourne NO quand un VIRTUAL SAFETY CAR est présent au lieu d'un vrai", async () => {
+        mockGet.mockImplementation((path: string) => {
+            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
+            if (path === "/race_control") return Promise.resolve([
+                { message: "VIRTUAL SAFETY CAR DEPLOYED", flag: "VSC" },
+            ]);
+            return Promise.resolve([]);
+        });
+
+        const result = await autoResolve("SAFETY_CAR", SESSION_KEY);
+        expect(result).toBe("NO");
     });
 });
 
