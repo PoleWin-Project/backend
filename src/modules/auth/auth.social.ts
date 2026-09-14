@@ -1,5 +1,7 @@
 import { OAuth2Client } from 'google-auth-library';
 import appleSignin from 'apple-signin-auth';
+import { randomBytes } from 'crypto';
+import { UniqueConstraintError } from 'sequelize';
 import { UserModel, ProfileModel } from "../../database/models";
 import { hashPassword } from "../../common/utils/password";
 import { signAccessToken, signRefreshToken } from "../../common/utils/jwt";
@@ -8,9 +10,17 @@ import { sequelize } from "../../database/sequelize";
 
 const googleClient = new OAuth2Client();
 
-function generateRandomUsername(email: string) {
-    const base = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
-    return `${base}${Math.floor(Math.random() * 10000)}`;
+function generateSocialUsername(email: string, displayName?: string) {
+    const base = (displayName || email.split('@')[0])
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .slice(0, 39) || 'user';
+    return `${base}_${randomBytes(5).toString('hex')}`;
+}
+
+function isUsernameCollision(error: unknown): error is UniqueConstraintError {
+    return error instanceof UniqueConstraintError &&
+        (Object.prototype.hasOwnProperty.call(error.fields ?? {}, 'username') ||
+            error.errors.some((item) => item.path === 'username'));
 }
 
 export async function processSocialLogin(
@@ -22,28 +32,36 @@ export async function processSocialLogin(
     let user = await UserModel.findOne({ where: { email } });
 
     if (!user) {
-        const username = displayName?.replace(/[^a-zA-Z0-9]/g, '') || generateRandomUsername(email);
-        
-        user = await sequelize.transaction(async (t) => {
-            const randomPassword = Math.random().toString(36).slice(-10) + "A1!";
-            const passwordHash = await hashPassword(randomPassword);
+        // A constraint failure aborts the Postgres transaction, so each retry needs a new one.
+        for (let attempt = 0; attempt < 5; attempt++) {
+            const username = generateSocialUsername(email, displayName);
+            try {
+                user = await sequelize.transaction(async (t) => {
+                    const randomPassword = Math.random().toString(36).slice(-10) + "A1!";
+                    const passwordHash = await hashPassword(randomPassword);
 
-            const newUser = await UserModel.create({
-                email,
-                username,
-                passwordHash,
-                isEmailVerified: true,
-                googleId: provider === 'google' ? providerId : null,
-                appleId: provider === 'apple' ? providerId : null,
-            }, { transaction: t });
+                    const newUser = await UserModel.create({
+                        email,
+                        username,
+                        passwordHash,
+                        isEmailVerified: true,
+                        googleId: provider === 'google' ? providerId : null,
+                        appleId: provider === 'apple' ? providerId : null,
+                    }, { transaction: t });
 
-            await ProfileModel.create(
-                { userId: newUser.id, displayName: username },
-                { transaction: t }
-            );
+                    await ProfileModel.create(
+                        { userId: newUser.id, displayName: username },
+                        { transaction: t }
+                    );
 
-            return newUser;
-        });
+                    return newUser;
+                });
+                break;
+            } catch (error) {
+                if (attempt < 4 && isUsernameCollision(error)) continue;
+                throw error;
+            }
+        }
     } else {
         // Mettre à jour l'ID social s'il manquait
         if (provider === 'google' && !user.googleId) {
@@ -52,6 +70,8 @@ export async function processSocialLogin(
             await user.update({ appleId: providerId });
         }
     }
+
+    if (!user) throw new Error('Unable to create social user');
 
     await user.update({ lastLoginAt: new Date() });
     
