@@ -6,10 +6,16 @@ const mockRepo = {
     create:   jest.fn(),
     update:   jest.fn(),
     delete:   jest.fn(),
+    upsertFromOpenF1: jest.fn(),
 };
 
 jest.mock("./sessions.repository", () => ({
     SessionsRepository: jest.fn().mockImplementation(() => mockRepo),
+}));
+
+const mockGetSessions = jest.fn();
+jest.mock("../openf1/openf1.service", () => ({
+    OpenF1Service: jest.fn().mockImplementation(() => ({ getSessions: mockGetSessions })),
 }));
 
 describe("SessionsService", () => {
@@ -17,6 +23,8 @@ describe("SessionsService", () => {
 
     beforeEach(() => {
         service = new SessionsService();
+        mockGetSessions.mockReset();
+        mockRepo.upsertFromOpenF1.mockResolvedValue({ created: 0, updated: 20 });
     });
 
     describe("list", () => {
@@ -27,6 +35,54 @@ describe("SessionsService", () => {
             const result = await service.list({ limit: 20, offset: 0 });
 
             expect(result).toEqual({ items: [fakeSession], total: 1, limit: 20, offset: 0 });
+        });
+
+        it("refreshes a populated season before selecting upcoming sessions and caches the refresh", async () => {
+            const calendar = [{ session_key: 42, country_name: "Bahrain" }];
+            mockGetSessions.mockResolvedValue(calendar);
+            mockRepo.findAll.mockResolvedValue({ rows: [{ name: "Bahrain - Race" }], count: 30 });
+            const query = { upcoming: true, limit: 50, offset: 0 };
+
+            const result = await service.list(query);
+            await service.list(query);
+
+            expect(result.items[0].name).toBe("Bahrain - Race");
+            expect(mockGetSessions).toHaveBeenCalledTimes(1);
+            expect(mockRepo.upsertFromOpenF1).toHaveBeenCalledWith(calendar);
+            expect(mockRepo.upsertFromOpenF1.mock.invocationCallOrder[0])
+                .toBeLessThan(mockRepo.findAll.mock.invocationCallOrder[0]!);
+        });
+
+        it("refreshes again after five minutes so schedule changes are picked up", async () => {
+            const now = Date.now();
+            const clock = jest.spyOn(Date, "now").mockReturnValue(now);
+            try {
+                mockGetSessions.mockResolvedValue([]);
+                mockRepo.findAll.mockResolvedValue({ rows: [], count: 0 });
+                const query = { upcoming: true, limit: 50, offset: 0 };
+                await service.list(query);
+                clock.mockReturnValue(now + 5 * 60 * 1000);
+                await service.list(query);
+                expect(mockGetSessions).toHaveBeenCalledTimes(2);
+            } finally {
+                clock.mockRestore();
+            }
+        });
+
+        it("shares a refresh between concurrent requests", async () => {
+            mockGetSessions.mockResolvedValue([]);
+            mockRepo.findAll.mockResolvedValue({ rows: [], count: 0 });
+            await Promise.all([1, 2].map(() => service.list({ upcoming: true, limit: 50, offset: 0 })));
+            expect(mockGetSessions).toHaveBeenCalledTimes(1);
+        });
+
+        it("retries after an upstream failure and keeps stored sessions available", async () => {
+            mockGetSessions.mockRejectedValueOnce(new Error("OpenF1 unavailable")).mockResolvedValue([]);
+            mockRepo.findAll.mockResolvedValue({ rows: [{ id: 1 }], count: 1 });
+            const query = { upcoming: true, limit: 50, offset: 0 };
+            await expect(service.list(query)).resolves.toMatchObject({ total: 1 });
+            await service.list(query);
+            expect(mockGetSessions).toHaveBeenCalledTimes(2);
         });
 
         it("filters by type", async () => {

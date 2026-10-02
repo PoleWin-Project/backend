@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
-import { RaceSessionModel } from "../../database/models";
+import { PredictionModel, RaceSessionModel } from "../../database/models";
 import { CreateSessionInput, ListSessionsQuery, UpdateSessionInput } from "./sessions.dto";
+import { sequelize } from "../../database/sequelize";
 import { OpenF1Session } from "../openf1/openf1.types";
 
 export class SessionsRepository {
@@ -44,8 +45,8 @@ export class SessionsRepository {
         return true;
     }
 
-    async upsertFromOpenF1(sessions: OpenF1Session[]): Promise<{ created: number; updated: number }> {
-        let created = 0, updated = 0;
+    async upsertFromOpenF1(sessions: OpenF1Session[]): Promise<{ created: number; updated: number; predictionsCreated: number }> {
+        let created = 0, updated = 0, predictionsCreated = 0;
         for (const s of sessions) {
             const defaults = {
                 name: `${s.country_name} - ${s.session_name}`,
@@ -53,17 +54,40 @@ export class SessionsRepository {
                 location: s.location,
                 dateStart: new Date(s.date_start),
             };
-            const [session, wasCreated] = await RaceSessionModel.findOrCreate({
-                where: { idCourseExternal: s.session_key },
-                defaults: { idCourseExternal: s.session_key, ...defaults },
+            await sequelize.transaction(async (transaction) => {
+                const [session, wasCreated] = await RaceSessionModel.findOrCreate({
+                    where: { idCourseExternal: s.session_key },
+                    defaults: { idCourseExternal: s.session_key, ...defaults },
+                    transaction,
+                });
+                if (wasCreated) {
+                    created++;
+                } else {
+                    await session.update(defaults, { transaction });
+                    updated++;
+                }
+
+                // Keep unresolved markets aligned with rescheduled sessions, including
+                // sessions whose old date is already in the past. Preserve settled results.
+                await PredictionModel.update({ closesAt: defaults.dateStart }, {
+                    where: { sessionId: session.id, winningValue: null },
+                    transaction,
+                });
+                const type = ({
+                    qualifying: "POLE_POSITION",
+                    race: "RACE_WINNER",
+                    sprint: "SPRINT_WINNER",
+                } as const)[s.session_name.toLowerCase().trim() as "qualifying" | "race" | "sprint"];
+                if (type && defaults.dateStart.getTime() > Date.now()) {
+                    const [, predictionCreated] = await PredictionModel.findOrCreate({
+                        where: { sessionId: session.id, type },
+                        defaults: { sessionId: session.id, type, closesAt: defaults.dateStart },
+                        transaction,
+                    });
+                    if (predictionCreated) predictionsCreated++;
+                }
             });
-            if (wasCreated) {
-                created++;
-            } else {
-                await session.update(defaults);
-                updated++;
-            }
         }
-        return { created, updated };
+        return { created, updated, predictionsCreated };
     }
 }
