@@ -11,7 +11,7 @@ import { sequelize } from "./database/sequelize";
 import { autoResolveScheduler } from "./modules/predictions/autoresolve.scheduler";
 import { sessionStartScheduler } from "./modules/raceSessions/sessionStart.scheduler";
 import { setupWsServer } from "./socket/ws.handler";
-import { SessionsService } from "./modules/sessions/sessions.service";
+import { getSessionsService } from "./modules/sessions/sessions.service";
 
 if (env.sentryDsn) {
     Sentry.init({ dsn: env.sentryDsn, environment: env.nodeEnv });
@@ -36,23 +36,9 @@ async function bootstrap() {
     autoResolveScheduler.start();
     sessionStartScheduler.start();
 
-    // Auto-sync sessions depuis OpenF1 si nécessaire (nouveau déploiement ou nouvelle année)
-    (async () => {
-        try {
-            const sessionsService = new SessionsService();
-            const { items, total } = await sessionsService.list({ upcoming: true, limit: 10, offset: 0 });
-            const year = new Date().getFullYear();
-            if (total < 10) {
-                logger.info(`Auto-sync sessions OpenF1 (${total} sessions futures, année ${year})`);
-                const result = await sessionsService.syncFromOpenF1(year);
-                logger.info(result, "Sessions synced from OpenF1");
-            } else {
-                logger.info(`Sessions OK — ${total} sessions futures en BDD`);
-            }
-        } catch (err) {
-            logger.warn({ err }, "Sessions auto-sync failed (non-bloquant)");
-        }
-    })();
+    // Refresh even when the database already contains a full season: dates can change.
+    void getSessionsService().list({ upcoming: true, limit: 1, offset: 0 })
+        .catch(err => logger.warn({ err }, "Initial calendar refresh failed"));
 
     httpServer.listen(env.port, () => {
         logger.info(`Server listening on http://localhost:${env.port}`);

@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from "express";
-import { SessionsService } from "./sessions.service";
+import { getSessionsService } from "./sessions.service";
 
 export class SessionsController {
-    constructor(private readonly service = new SessionsService()) {}
+    constructor(private readonly service = getSessionsService()) {}
 
     list = async (req: Request, res: Response, next: NextFunction) => {
         try {
