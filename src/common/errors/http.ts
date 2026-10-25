@@ -13,4 +13,10 @@ export const httpErrors = {
         new AppError(409, msg, code),
     unprocessableEntity: (msg = "Unprocessable entity", code = "UNPROCESSABLE_ENTITY") =>
         new AppError(422, msg, code),
+    // Client trop ancien (ex. app qui envoie encore une mise après la bascule).
+    upgradeRequired: (msg = "Upgrade required", code = "UPGRADE_REQUIRED") =>
+        new AppError(426, msg, code),
+    // Fonctionnalité temporairement indisponible (ex. gel pendant une maintenance).
+    serviceUnavailable: (msg = "Service unavailable", code = "SERVICE_UNAVAILABLE") =>
+        new AppError(503, msg, code),
 };

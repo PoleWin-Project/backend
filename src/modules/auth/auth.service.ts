@@ -24,6 +24,7 @@ import {
     PasswordResetPayload,
 } from "./auth.dto";
 import { AuthUser } from "../../common/security/auth.types";
+import { getScoreFields } from "../championship/scoreSummary";
 
 export class AuthService {
     async register(input: RegisterInput) {
@@ -74,7 +75,8 @@ export class AuthService {
                     email:    created.user.email,
                     username: created.user.username,
                     roles:    created.roles,
-                    points:   500, // New user starts with 500
+                    // Champs de score séparés (championnat / Garage) + alias `points`.
+                    ...(await getScoreFields(created.user.id, 500)),
                     profile: {
                         favoriteTeamCode: null,
                         favoriteDriverCode: null,
@@ -133,7 +135,7 @@ export class AuthService {
                 username:        user.username,
                 isEmailVerified: user.isEmailVerified,
                 roles,
-                points:          user.profile?.points ?? 0,
+                ...(await getScoreFields(user.id, user.profile?.points ?? 0)),
                 profile: {
                     favoriteTeamCode: user.profile?.favoriteTeamCode ?? null,
                     favoriteDriverCode: user.profile?.favoriteDriverCode ?? null,
@@ -275,7 +277,7 @@ export class AuthService {
                 email:    user.email,
                 username: user.username,
                 roles:    [user.role ?? "user"],
-                points:   user.profile?.points ?? 0,
+                ...(await getScoreFields(user.id, user.profile?.points ?? 0)),
                 profile: {
                     favoriteTeamCode: user.profile?.favoriteTeamCode ?? null,
                     favoriteDriverCode: user.profile?.favoriteDriverCode ?? null,

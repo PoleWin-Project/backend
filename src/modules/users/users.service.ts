@@ -2,6 +2,8 @@ import { fn, col, literal } from "sequelize";
 import { httpErrors } from "../../common/errors/http";
 import { PronosticModel } from "../../database/models";
 import { UsersRepository } from "./users.repository";
+import { isChampionshipMode } from "../../config/env";
+import { championshipService } from "../championship/championship.service";
 import { FriendsRepository } from "../friends/friends.repository";
 import {
     AdminUpdateUserInput,
@@ -53,6 +55,44 @@ export class UsersService {
     }
 
     async getMyStats(userId: number) {
+        if (isChampionshipMode()) return this.getChampionshipStats(userId);
+        return this.getLegacyStats(userId);
+    }
+
+    /**
+     * Stats du modèle championship : précision des pronostics et points de championnat.
+     * Plus aucune notion de mise, de gain net ou de « bilan ».
+     */
+    private async getChampionshipStats(userId: number) {
+        const rows = await PronosticModel.findAll({
+            where: { userId, scoringModel: "fixed_reward" },
+            attributes: ["status", [fn("COUNT", col("id")), "count"]],
+            group: ["status"],
+            raw: true,
+        }) as any[];
+        const byStatus = Object.fromEntries(rows.map((r) => [r.status, Number(r.count)]));
+        const correct   = byStatus["won"] ?? 0;
+        const incorrect = byStatus["lost"] ?? 0;
+        const pending   = (byStatus["submitted"] ?? 0) + (byStatus["awaiting_verification"] ?? 0);
+        const score = await championshipService.getActiveSeasonScore(userId);
+
+        return {
+            total: correct + incorrect + pending,
+            correct,
+            incorrect,
+            pending,
+            accuracy: correct + incorrect > 0 ? Math.round((correct / (correct + incorrect)) * 100) : 0,
+            championshipPoints: score.points,
+            season: score.season,
+            // Alias pour les anciens clients (affichaient `won` / `winRate`).
+            won: correct,
+            lost: incorrect,
+            winRate: correct + incorrect > 0 ? Math.round((correct / (correct + incorrect)) * 100) : 0,
+        };
+    }
+
+    /** [MODÈLE LEGACY] Stats incluant mises et gain net. */
+    private async getLegacyStats(userId: number) {
         const rows = await PronosticModel.findAll({
             where: { userId },
             attributes: [

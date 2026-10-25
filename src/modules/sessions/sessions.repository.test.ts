@@ -39,15 +39,20 @@ describe("calendar synchronization", () => {
     });
 
     it.each([
-        ["Qualifying", "POLE_POSITION"], ["Sprint", "SPRINT_WINNER"], ["Race", "RACE_WINNER"],
-    ])("creates missing markets for %s", async (name, type) => {
+        ["Qualifying", ["POLE_POSITION"]],
+        ["Sprint", ["SPRINT_WINNER"]],
+        ["Race", ["RACE_WINNER", "PODIUM", "FASTEST_LAP", "DNF", "SAFETY_CAR"]],
+    ] as const)("creates missing markets for %s", async (name, types) => {
         (RaceSessionModel.findOrCreate as jest.Mock).mockResolvedValue([{ id: 7 }, true]);
         (PredictionModel.findOrCreate as jest.Mock).mockResolvedValue([{ id: 9 }, true]);
         const result = await new SessionsRepository().upsertFromOpenF1([source(name)]);
-        expect(PredictionModel.findOrCreate).toHaveBeenCalledWith(expect.objectContaining({
-            where: { sessionId: 7, type },
-        }));
-        expect(result.predictionsCreated).toBe(1);
+        for (const type of types) {
+            expect(PredictionModel.findOrCreate).toHaveBeenCalledWith(expect.objectContaining({
+                where: { sessionId: 7, type },
+            }));
+        }
+        expect(PredictionModel.findOrCreate).toHaveBeenCalledTimes(types.length);
+        expect(result.predictionsCreated).toBe(types.length);
     });
 
     it.each(["Practice 1", "Sprint Qualifying", "Sprint Shootout"])("does not create markets for %s", async name => {

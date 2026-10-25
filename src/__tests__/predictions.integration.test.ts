@@ -132,7 +132,9 @@ describe("POST /api/v1/predictions/:predictionId/pronostic", () => {
     it("returns 422 for invalid body", async () => {
         const res = await request(appUser)
             .post("/api/v1/predictions/1/pronostic")
-            .send({ value: "VER" }); // missing pointsStaked
+            // `pointsStaked` n'est plus obligatoire au niveau du DTO (modèle sans mise) :
+            // c'est l'absence de `value` qui rend le corps invalide.
+            .send({ pointsStaked: 10 }); // missing value
 
         expect(res.status).toBe(422);
     });

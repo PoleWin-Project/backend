@@ -1,7 +1,12 @@
+import { withPublicAvatars } from "../paddock/publicAvatars";
 import { Request, Response, NextFunction } from "express";
 import { UsersService } from "./users.service";
 import { withLinks, meLinks, publicProfileLinks } from "../../common/utils/hateoas";
 import { ListUsersQuery } from "./users.dto";
+import { withSeasonPoints } from "../championship/scoreSummary";
+import { seasonsService } from "../seasons/seasons.service";
+
+import { paddockService } from "../paddock/paddock.service";
 
 export class UsersController {
     constructor(private readonly service = new UsersService()) {}
@@ -37,8 +42,11 @@ export class UsersController {
 
     publicProfile = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const user = await this.service.getPublicProfile(req.params.id);
-            res.json(withLinks({ status: "ok", user }, publicProfileLinks(req.params.id)));
+            // Mode championship : points de la saison active + résultat public de la Saison Bêta.
+            const user = await withSeasonPoints(await this.service.getPublicProfile(req.params.id));
+            const betaSeason = await seasonsService.getBetaResult(Number(req.params.id));
+            const cosmetics = await paddockService.appearance(Number(req.params.id));
+            res.json(withLinks({ status: "ok", user, betaSeason, cosmetics }, publicProfileLinks(req.params.id)));
         } catch (e) {
             next(e);
         }
@@ -47,7 +55,7 @@ export class UsersController {
     search = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const q = (req.query.q as string) ?? "";
-            const users = await this.service.searchUsers(q);
+            const users = await withPublicAvatars(await withSeasonPoints(await this.service.searchUsers(q)));
             res.json({ status: "ok", users });
         } catch (e) {
             next(e);

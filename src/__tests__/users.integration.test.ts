@@ -1,3 +1,14 @@
+jest.mock("../modules/paddock/paddock.service", () => ({
+    paddockService: { appearances: jest.fn().mockResolvedValue(new Map()), appearance: jest.fn().mockResolvedValue({ frame: null, title: null }) },
+}));
+// Mode legacy par défaut : les points de saison ne remplacent rien, et il n'y a pas
+// de Saison Bêta archivée dans ces tests (aucune base réelle).
+jest.mock("../modules/championship/scoreSummary", () => ({
+    withSeasonPoints: jest.fn(async (data: unknown) => data),
+}));
+jest.mock("../modules/seasons/seasons.service", () => ({
+    seasonsService: { getBetaResult: jest.fn().mockResolvedValue(null) },
+}));
 jest.mock("../modules/users/users.service", () => ({
     UsersService: jest.fn().mockImplementation(function (this: any) {
         this.getMe            = jest.fn();

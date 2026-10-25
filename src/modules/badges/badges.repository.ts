@@ -3,8 +3,9 @@ import { BadgeModel, UserBadgeModel, UserModel } from "../../database/models";
 import { CreateBadgeInput, UpdateBadgeInput } from "./badges.dto";
 
 export class BadgesRepository {
+    /** Catalogue visible (les badges masqués — ancienne mécanique de mise — sont exclus). */
     findAll() {
-        return BadgeModel.findAll({ order: [["createdAt", "ASC"]] });
+        return BadgeModel.findAll({ where: { isHidden: false }, order: [["createdAt", "ASC"]] });
     }
 
     /** Nombre de détenteurs par badge. */
@@ -49,7 +50,8 @@ export class BadgesRepository {
     findUserBadges(userId: number) {
         return UserBadgeModel.findAll({
             where: { userId },
-            include: [{ model: BadgeModel, as: "badge" }],
+            // Les attributions de badges masqués sont conservées en base mais pas affichées.
+            include: [{ model: BadgeModel, as: "badge", where: { isHidden: false }, required: true }],
             order: [["awardedAt", "DESC"]],
         });
     }

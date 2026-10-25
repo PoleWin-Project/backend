@@ -1,3 +1,4 @@
+import { withPublicAvatars } from "../paddock/publicAvatars";
 import { Request, Response, NextFunction } from "express";
 import { GamesService } from "./games.service";
 
@@ -8,9 +9,10 @@ export class GamesController {
         try {
             const user    = (req as any).user;
             const isAdmin = Array.isArray(user?.roles) && user.roles.includes("admin");
-            const { points, gameId, metricMs } = req.body;
+            // `points` n'est plus lu : le montant est calculé côté serveur (cf. claimReward).
+            const { gameId, metricMs } = req.body ?? {};
 
-            const result = await this.service.rewardUser(user.id, points, gameId, isAdmin, metricMs);
+            const result = await this.service.claimReward(user.id, gameId, metricMs, isAdmin);
             res.status(200).json({ status: "success", ...result });
         } catch (e) {
             next(e);
@@ -63,7 +65,7 @@ export class GamesController {
                 return;
             }
 
-            const result = await this.service.getLeaderboard(gameId, user.id);
+            const result = await withPublicAvatars(await this.service.getLeaderboard(gameId, user.id));
             res.json({ status: "ok", ...result });
         } catch (e) {
             next(e);

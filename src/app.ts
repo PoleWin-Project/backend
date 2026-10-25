@@ -23,6 +23,11 @@ import driverDleRoutes from "./modules/driverDle/driverDle.routes";
 import friendsRoutes from "./modules/friends/friends.routes";
 import dmsRoutes from "./modules/dms/dms.routes";
 import pushRoutes from "./modules/push/push.routes";
+import seasonsRoutes from "./modules/seasons/seasons.routes";
+import garageRoutes from "./modules/garage/garage.routes";
+import configRoutes from "./modules/config/config.routes";
+import paddockRoutes from "./modules/paddock/paddock.routes";
+import challengesRoutes from "./modules/challenges/challenges.routes";
 import { errorHandler } from "./common/middleware/errorHandler";
 import { notFound } from "./common/middleware/notFound";
 import { jwtAuth } from "./common/middleware/jwtAuth";
@@ -87,6 +92,12 @@ export function createApp() {
 	app.use(API_V1, friendsRoutes);
 	app.use(API_V1, dmsRoutes);
 	app.use(API_V1, pushRoutes);
+	// Migration « no simulated gambling » : saisons, crédits Garage, config client.
+	app.use(API_V1, seasonsRoutes);
+	app.use(API_V1, garageRoutes);
+	app.use(API_V1, configRoutes);
+	app.use(API_V1, challengesRoutes);
+	app.use(API_V1, paddockRoutes);
 
 	app.use(notFound);
 	app.use(errorHandler);

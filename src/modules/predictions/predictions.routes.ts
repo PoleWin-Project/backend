@@ -32,7 +32,9 @@ router.delete("/predictions/:predictionId/pronostic",        requireAuth, ctrl.c
 
 router.post("/predictions/admin/sessions/:sessionId/predictions",    requireRole("admin"), validateBody(CreatePredictionDto), ctrl.create);
 router.patch("/predictions/admin/predictions/:predictionId",          requireRole("admin"), validateBody(UpdatePredictionDto), ctrl.update);
+// Suppression refusée (409) si la prédiction a des pronostics : utiliser /void.
 router.delete("/predictions/admin/predictions/:predictionId",         requireRole("admin"),                                    ctrl.delete);
+router.post("/predictions/admin/predictions/:predictionId/void",      requireRole("admin"),                                    ctrl.voidPrediction);
 
 router.get("/predictions/admin/predictions/:predictionId/pronostics", requireRole("admin"), ctrl.allPronostics);
 router.post("/predictions/admin/predictions/:predictionId/resolve",   requireRole("admin"), validateBody(ResolveDto), ctrl.resolve);

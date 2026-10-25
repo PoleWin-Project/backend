@@ -14,6 +14,7 @@
         "test": "jest",
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage",
+        "test:db": "jest -c jest.db.config.js --runInBand",
         "status": "node scripts/status.mjs"
     },
     "repository": {
