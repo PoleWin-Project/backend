@@ -1,7 +1,7 @@
 import { httpErrors } from "../../common/errors/http";
 import { SessionsRepository } from "./sessions.repository";
 import { CreateSessionInput, ListSessionsQuery, UpdateSessionInput } from "./sessions.dto";
-import { OpenF1Service } from "../openf1/openf1.service";
+import { SyncService } from "../predictions/sync.service";
 
 export class SessionsService {
     constructor(private readonly repo = new SessionsRepository()) {}
@@ -33,9 +33,7 @@ export class SessionsService {
     }
 
     async syncFromOpenF1(year?: number) {
-        const openf1 = new OpenF1Service();
-        const sessions = await openf1.getSessions({ year: year ?? new Date().getFullYear() });
-        const { created, updated } = await this.repo.upsertFromOpenF1(sessions);
-        return { created, updated, total: sessions.length };
+        const result = await new SyncService().syncSeason(year ?? new Date().getFullYear());
+        return { created: result.sessionsCreated, updated: result.sessionsUpdated, predictionsCreated: result.predictionsCreated, total: result.total };
     }
 }

@@ -45,6 +45,12 @@ tags:
       description: Messages des canaux de chat
     - name: Leaderboard
       description: Classements globaux, par league et par session de pronostic
+    - name: Leagues
+      description: Ligues privées et invitations
+    - name: Weekends
+      description: Vue agrégée d'un Grand Prix
+    - name: Games
+      description: Parties et récompenses du Garage
 
 paths:
 
@@ -740,7 +746,7 @@ paths:
 
     # ── Predictions ───────────────────────────────────────────────────────────
 
-    /api/v1/sessions/{sessionId}/predictions:
+    /api/v1/predictions/sessions/{sessionId}/predictions:
         get:
             tags: [Predictions]
             summary: Prédictions d'une session
@@ -771,7 +777,7 @@ paths:
                 "404":
                     $ref: "#/components/responses/NotFound"
 
-    /api/v1/admin/sessions/{sessionId}/predictions:
+    /api/v1/predictions/admin/sessions/{sessionId}/predictions:
         post:
             tags: [Predictions]
             summary: Créer une prédiction pour une session (admin)
@@ -786,7 +792,7 @@ paths:
                         schema:
                             $ref: "#/components/schemas/CreatePredictionRequest"
                         example:
-                            title: "Qui remporte la course ?"
+                            type: RACE_WINNER
                             scope: "race"
                             closesAt: "2024-09-01T13:00:00Z"
                             defaultMultiplier: 2.5
@@ -804,7 +810,7 @@ paths:
                 "403":
                     $ref: "#/components/responses/Forbidden"
 
-    /api/v1/admin/predictions/{predictionId}:
+    /api/v1/predictions/admin/predictions/{predictionId}:
         patch:
             tags: [Predictions]
             summary: Modifier une prédiction (admin)
@@ -853,12 +859,13 @@ paths:
                 "404":
                     $ref: "#/components/responses/NotFound"
 
-    /api/v1/admin/predictions/{predictionId}/resolve:
+    /api/v1/predictions/admin/predictions/{predictionId}/resolve:
         post:
             tags: [Predictions]
             summary: Résoudre une prédiction (admin)
             description: >
-                Fournit la `winningValue`. Pour chaque pronostic `submitted` :
+                Fournit la `winningValue` ou consulte le résultat OpenF1 après la session.
+                Un résultat `provisional` ne distribue pas de points. Pour chaque pronostic `submitted` ou `awaiting_verification` validé :
 
                 - **won** → `pointsEarned = pointsStaked × multiplier`, crédité sur `profile.points`
 
@@ -877,7 +884,7 @@ paths:
                             winningValue: "Leclerc"
             responses:
                 "200":
-                    description: Prédiction résolue
+                    description: Prédiction résolue ou en attente d'un résultat
                     content:
                         application/json:
                             schema:
@@ -890,8 +897,12 @@ paths:
                                         type: integer
                                         description: Nombre de pronostics traités
                                         example: 42
+                                    awaiting:
+                                        type: integer
+                                        description: Nombre de pronostics en attente
                                     winningValue:
                                         type: string
+                                        nullable: true
                                         example: "Leclerc"
                 "401":
                     $ref: "#/components/responses/Unauthorized"
@@ -900,7 +911,7 @@ paths:
                 "404":
                     $ref: "#/components/responses/NotFound"
 
-    /api/v1/admin/predictions/{predictionId}/pronostics:
+    /api/v1/predictions/admin/predictions/{predictionId}/pronostics:
         get:
             tags: [Predictions]
             summary: Voir tous les pronostics d'une prédiction (admin)
@@ -915,6 +926,27 @@ paths:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/PronosticsListResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
+
+    /api/v1/predictions/admin/sync:
+        post:
+            tags: [Predictions]
+            summary: Synchroniser les sessions et les prédictions F1 (admin)
+            security:
+                - bearerAuth: []
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                year: { type: integer }
+            responses:
+                "200":
+                    description: Nombre de sessions et de prédictions synchronisées
                 "401":
                     $ref: "#/components/responses/Unauthorized"
                 "403":
@@ -1052,7 +1084,7 @@ paths:
                             schema:
                                 $ref: "#/components/schemas/ErrorResponse"
 
-    /api/v1/users/me/pronostics:
+    /api/v1/predictions/users/me/pronostics:
         get:
             tags: [Pronostics]
             summary: Historique de mes paris
@@ -1064,7 +1096,7 @@ paths:
                   required: false
                   schema:
                       type: string
-                      enum: [draft, submitted, won, lost, void]
+                      enum: [draft, submitted, won, lost, void, awaiting_verification]
                 - name: limit
                   in: query
                   schema: { type: integer, default: 20 }
@@ -1081,7 +1113,7 @@ paths:
                 "401":
                     $ref: "#/components/responses/Unauthorized"
 
-    /api/v1/sessions/{sessionId}/pronostics/me:
+    /api/v1/predictions/sessions/{sessionId}/pronostics/me:
         get:
             tags: [Pronostics]
             summary: Mes paris pour une session
@@ -2493,6 +2525,8 @@ paths:
             tags: [Leaderboard]
             summary: Classement d'une league
             description: Retourne les membres d'une league triés par solde de points décroissant.
+            security:
+                - bearerAuth: []
             parameters:
                 - name: leagueId
                   in: path
@@ -2553,6 +2587,8 @@ paths:
     /api/v1/leaderboard/sessions/{sessionId}/leagues/{leagueId}:
         get:
             tags: [Leaderboard]
+            security:
+                - bearerAuth: []
             summary: Classement d'une session filtré à une league
             description: >
                 Même logique que le classement de session, mais restreint aux membres
@@ -2585,6 +2621,253 @@ paths:
                                 $ref: "#/components/schemas/LeaderboardSessionLeagueResponse"
                 "404":
                     $ref: "#/components/responses/NotFound"
+
+    /api/v1/leagues/me:
+        get:
+            tags: [Leagues]
+            summary: Mes ligues
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: Ligues dont l'utilisateur est membre
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status: { type: string, example: ok }
+                                    leagues:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/League"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+
+    /api/v1/leagues:
+        post:
+            tags: [Leagues]
+            summary: Créer une ligue privée
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [name]
+                            properties:
+                                name: { type: string, minLength: 2, maxLength: 100 }
+                                seasonYear: { type: integer }
+            responses:
+                "201":
+                    description: Ligue créée avec inviteCode
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/LeagueResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+
+    /api/v1/leagues/join:
+        post:
+            tags: [Leagues]
+            summary: Rejoindre une ligue par code
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [inviteCode]
+                            properties:
+                                inviteCode: { type: string }
+            responses:
+                "200":
+                    description: Ligue rejointe
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/LeagueResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/leagues/{id}/members:
+        get:
+            tags: [Leagues]
+            summary: Membres d'une ligue privée
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema: { type: integer }
+            responses:
+                "200":
+                    description: Membres de la ligue
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status: { type: string, example: ok }
+                                    members:
+                                        type: array
+                                        items:
+                                            type: object
+                                            properties:
+                                                userId: { type: integer }
+                                                joinedAt: { type: string, format: date-time }
+                                                user:
+                                                    type: object
+                                                    properties:
+                                                        id: { type: integer }
+                                                        username: { type: string }
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/leagues/{id}/members/me:
+        delete:
+            tags: [Leagues]
+            summary: Quitter une ligue
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema: { type: integer }
+            responses:
+                "200":
+                    description: Ligue quittée
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/leagues/{id}:
+        delete:
+            tags: [Leagues]
+            summary: Supprimer sa ligue privée
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema: { type: integer }
+            responses:
+                "200":
+                    description: Ligue supprimée par son propriétaire
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/weekends/next:
+        get:
+            tags: [Weekends]
+            summary: Prochain Grand Prix avec sessions et pronostics
+            responses:
+                "200":
+                    description: Calendrier, pilotes, questions, échéances et résultats
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/WeekendResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/weekends/{meetingKey}:
+        get:
+            tags: [Weekends]
+            summary: Grand Prix par identifiant OpenF1
+            parameters:
+                - name: meetingKey
+                  in: path
+                  required: true
+                  schema: { type: integer }
+            responses:
+                "200":
+                    description: Calendrier, pilotes, questions, échéances et résultats
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/WeekendResponse"
+                "400":
+                    $ref: "#/components/responses/ValidationError"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    /api/v1/games/plays-today:
+        get:
+            tags: [Games]
+            summary: Nombre de parties jouées aujourd'hui
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: gameId
+                  in: query
+                  required: true
+                  schema: { type: string, enum: [reaction] }
+            responses:
+                "200":
+                    description: Nombre de parties et limite quotidienne
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status: { type: string, example: ok }
+                                    played: { type: integer }
+                                    limit: { type: integer, nullable: true }
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+
+    /api/v1/games/reward:
+        post:
+            tags: [Games]
+            summary: Créditer les points d'une partie de réaction
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [gameId, points]
+                            properties:
+                                gameId: { type: string, enum: [reaction] }
+                                points: { type: integer, minimum: 2, maximum: 50 }
+            responses:
+                "200":
+                    description: Points crédités
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    status: { type: string, example: success }
+                                    newTotal: { type: integer }
+                                    rewarded: { type: integer }
+                                    playsToday: { type: integer }
+                                    playsLeft: { type: integer }
+                                    message: { type: string }
+                "400":
+                    $ref: "#/components/responses/ValidationError"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    $ref: "#/components/responses/Forbidden"
 
 # ─── Components ───────────────────────────────────────────────────────────────
 
@@ -2639,6 +2922,66 @@ components:
                         $ref: "#/components/schemas/ErrorResponse"
 
     schemas:
+
+        League:
+            type: object
+            properties:
+                id: { type: integer }
+                name: { type: string }
+                ownerUserId: { type: integer }
+                seasonYear: { type: integer }
+                inviteCode: { type: string }
+                createdAt: { type: string, format: date-time }
+
+        LeagueResponse:
+            type: object
+            properties:
+                status: { type: string, example: ok }
+                league:
+                    $ref: "#/components/schemas/League"
+
+        WeekendResponse:
+            type: object
+            properties:
+                status: { type: string, example: ok }
+                weekend:
+                    type: object
+                    properties:
+                        meetingKey: { type: integer }
+                        name: { type: string }
+                        drivers:
+                            type: array
+                            items:
+                                type: object
+                                properties:
+                                    driverNumber: { type: integer }
+                                    code: { type: string }
+                                    name: { type: string }
+                                    team: { type: string }
+                        sessions:
+                            type: array
+                            items:
+                                type: object
+                                properties:
+                                    id: { type: integer }
+                                    externalSessionKey: { type: integer, nullable: true }
+                                    name: { type: string }
+                                    type: { type: string }
+                                    location: { type: string, nullable: true }
+                                    dateStart: { type: string, format: date-time, nullable: true }
+                                    predictions:
+                                        type: array
+                                        items:
+                                            type: object
+                                            properties:
+                                                id: { type: integer }
+                                                type: { type: string, enum: [POLE_POSITION, RACE_WINNER, SPRINT_WINNER] }
+                                                closesAt: { type: string, format: date-time, nullable: true }
+                                                isOpen: { type: boolean }
+                                                resultStatus: { type: string, enum: [pending, provisional, validated] }
+                                                winningValue: { type: string, nullable: true }
+                                                resultSource: { type: string, nullable: true }
+                                                resolvedAt: { type: string, format: date-time, nullable: true }
 
         # ── Sessions ──────────────────────────────────────────────────────────
 
@@ -2738,9 +3081,9 @@ components:
                 sessionId:
                     type: integer
                     example: 1
-                title:
+                type:
                     type: string
-                    example: "Qui remporte la course ?"
+                    enum: [POLE_POSITION, RACE_WINNER, SPRINT_WINNER]
                 scope:
                     type: string
                     nullable: true
@@ -2750,10 +3093,26 @@ components:
                     format: date-time
                     nullable: true
                     example: "2024-09-01T13:00:00.000Z"
+                defaultMultiplier:
+                    type: number
+                    example: 2
+                winningValue:
+                    type: string
+                    nullable: true
+                resultSource:
+                    type: string
+                    nullable: true
+                resultStatus:
+                    type: string
+                    enum: [pending, provisional, validated]
+                resolvedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
                 createdAt:
                     type: string
                     format: date-time
-            required: [id, sessionId, title]
+            required: [id, sessionId, type]
 
         PredictionResponse:
             type: object
@@ -2777,13 +3136,11 @@ components:
 
         CreatePredictionRequest:
             type: object
-            required: [title]
+            required: [type]
             properties:
-                title:
+                type:
                     type: string
-                    minLength: 1
-                    maxLength: 255
-                    example: "Qui remporte la course ?"
+                    enum: [POLE_POSITION, RACE_WINNER, SPRINT_WINNER]
                 scope:
                     type: string
                     nullable: true
@@ -2804,10 +3161,9 @@ components:
         UpdatePredictionRequest:
             type: object
             properties:
-                title:
+                type:
                     type: string
-                    minLength: 1
-                    maxLength: 255
+                    enum: [POLE_POSITION, RACE_WINNER, SPRINT_WINNER]
                 scope:
                     type: string
                     nullable: true
@@ -2818,13 +3174,16 @@ components:
 
         ResolveRequest:
             type: object
-            required: [winningValue]
             properties:
                 winningValue:
                     type: string
                     minLength: 1
                     maxLength: 500
                     example: "Leclerc"
+                resultStatus:
+                    type: string
+                    enum: [provisional, validated]
+                    default: validated
 
         PronosticDetail:
             type: object

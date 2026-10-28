@@ -129,6 +129,14 @@ describe("PredictionsService", () => {
             expect(result).toBe(fakePronostic);
         });
 
+        it("uses the prediction multiplier", async () => {
+            mockRepo.findById.mockResolvedValue({ ...fakePred, defaultMultiplier: 2.5 });
+
+            await service.placePronostic(1, 1, { value: "VER", pointsStaked: 50 });
+
+            expect(mockRepo.createPronosticWithDetail).toHaveBeenCalledWith(1, 1, 50, "VER", 2.5, {});
+        });
+
         it("throws 422 when prediction is closed", async () => {
             const closedPred = { ...fakePred, closesAt: new Date(Date.now() - 1000) };
             mockRepo.findById.mockResolvedValue(closedPred);
@@ -199,7 +207,7 @@ describe("PredictionsService", () => {
     // ── resolve ─────────────────────────────────────────────────────────────────
 
     describe("resolve", () => {
-        const fakePred = { id: 1, type: "RACE_WINNER", session: { idCourseExternal: 9000 } } as any;
+        const fakePred = { id: 1, type: "RACE_WINNER", session: { idCourseExternal: 9000 }, update: jest.fn().mockResolvedValue({}) } as any;
 
         const makePronostic = (value: string) => ({
             userId:      1,
@@ -242,6 +250,20 @@ describe("PredictionsService", () => {
                 { status: "awaiting_verification" }, { transaction: {} },
             );
             expect(result).toMatchObject({ resolved: 0, awaiting: 1, winningValue: null });
+        });
+
+        it("records a provisional result without crediting points", async () => {
+            const pronostic = makePronostic("VER");
+            mockRepo.findById.mockResolvedValue(fakePred);
+            mockRepo.findAllPronosticsForPrediction.mockResolvedValue([pronostic] as any);
+
+            const result = await service.resolve(1, { winningValue: "VER", resultStatus: "provisional" });
+
+            expect(fakePred.update).toHaveBeenCalledWith(expect.objectContaining({
+                winningValue: "VER", resultSource: "admin", resultStatus: "provisional", resolvedAt: null,
+            }), { transaction: {} });
+            expect(pronostic.update).not.toHaveBeenCalled();
+            expect(result).toMatchObject({ resolved: 0, awaiting: 1 });
         });
 
         it("auto-resolves when no winningValue provided", async () => {

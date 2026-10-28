@@ -34,6 +34,7 @@ export type UpdatePronosticInput = z.infer<typeof UpdatePronosticDto>;
 
 export const ResolveDto = z.object({
     winningValue: z.string().min(1).max(500).optional(),
+    resultStatus: z.enum(["provisional", "validated"]).optional(),
 });
 
 export type ResolveInput = z.infer<typeof ResolveDto>;

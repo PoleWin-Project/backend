@@ -34,23 +34,23 @@ async function bootstrap() {
 
     autoResolveScheduler.start();
 
-    // Auto-sync sessions depuis OpenF1 si nécessaire (nouveau déploiement ou nouvelle année)
-    (async () => {
+    let syncing = false;
+    const syncSessions = async () => {
+        if (syncing) return;
+        syncing = true;
         try {
             const sessionsService = new SessionsService();
-            const { items, total } = await sessionsService.list({ upcoming: true, limit: 10, offset: 0 });
             const year = new Date().getFullYear();
-            if (total < 10) {
-                logger.info(`Auto-sync sessions OpenF1 (${total} sessions futures, année ${year})`);
-                const result = await sessionsService.syncFromOpenF1(year);
-                logger.info(result, "Sessions synced from OpenF1");
-            } else {
-                logger.info(`Sessions OK — ${total} sessions futures en BDD`);
-            }
+            await sessionsService.syncFromOpenF1(year);
+            if (new Date().getMonth() === 11) await sessionsService.syncFromOpenF1(year + 1);
         } catch (err) {
             logger.warn({ err }, "Sessions auto-sync failed (non-bloquant)");
+        } finally {
+            syncing = false;
         }
-    })();
+    };
+    void syncSessions();
+    const syncTimer = setInterval(() => void syncSessions(), 6 * 60 * 60 * 1000);
 
     httpServer.listen(env.port, () => {
         logger.info(`Server listening on http://localhost:${env.port}`);
@@ -59,6 +59,7 @@ async function bootstrap() {
     const shutdown = async (signal: string) => {
         logger.info(`${signal} received — graceful shutdown starting`);
         autoResolveScheduler.stop();
+        clearInterval(syncTimer);
         httpServer.close(async () => {
             try {
                 await sequelize.close();

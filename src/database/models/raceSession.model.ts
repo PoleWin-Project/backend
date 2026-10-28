@@ -17,6 +17,7 @@ export class RaceSessionModel extends Model<
 > {
 	declare id: CreationOptional<number>;
 	declare idCourseExternal: number | null;
+	declare meetingKey: CreationOptional<number | null>;
 	declare name: string;
 	declare type: string;
 	declare location: string | null;
@@ -38,6 +39,7 @@ export class RaceSessionModel extends Model<
 			{
 				id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
 				idCourseExternal: { type: DataTypes.INTEGER, allowNull: true, field: "id_course_external" },
+				meetingKey: { type: DataTypes.INTEGER, allowNull: true, field: "meeting_key" },
 				name: { type: DataTypes.STRING, allowNull: false },
 				type: { type: DataTypes.STRING, allowNull: false },
 				location: { type: DataTypes.STRING, allowNull: true, field: "location" },

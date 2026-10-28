@@ -73,11 +73,11 @@ const fakePronostic = {
 
 // ── Public routes ─────────────────────────────────────────────────────────────
 
-describe("GET /api/v1/sessions/:sessionId/predictions", () => {
+describe("GET /api/v1/predictions/sessions/:sessionId/predictions", () => {
     it("returns predictions for a session", async () => {
         svc.getBySession.mockResolvedValue([fakePrediction]);
 
-        const res = await request(appPublic).get("/api/v1/sessions/10/predictions");
+        const res = await request(appPublic).get("/api/v1/predictions/sessions/10/predictions");
 
         expect(res.status).toBe(200);
         expect(res.body.predictions).toHaveLength(1);
@@ -183,34 +183,34 @@ describe("DELETE /api/v1/predictions/:predictionId/pronostic", () => {
     });
 });
 
-describe("GET /api/v1/users/me/pronostics", () => {
+describe("GET /api/v1/predictions/users/me/pronostics", () => {
     it("returns paginated pronostics for current user", async () => {
         svc.listMyPronostics.mockResolvedValue({
             items: [fakePronostic], total: 1, limit: 20, offset: 0,
         });
 
-        const res = await request(appUser).get("/api/v1/users/me/pronostics");
+        const res = await request(appUser).get("/api/v1/predictions/users/me/pronostics");
 
         expect(res.status).toBe(200);
         expect(res.body.items).toHaveLength(1);
     });
 
     it("returns 401 without auth", async () => {
-        const res = await request(appPublic).get("/api/v1/users/me/pronostics");
+        const res = await request(appPublic).get("/api/v1/predictions/users/me/pronostics");
         expect(res.status).toBe(401);
     });
 });
 
 // ── Admin routes ──────────────────────────────────────────────────────────────
 
-describe("POST /api/v1/admin/sessions/:sessionId/predictions", () => {
+describe("POST /api/v1/predictions/admin/sessions/:sessionId/predictions", () => {
     const validBody = { type: "RACE_WINNER", defaultMultiplier: 2 };
 
     it("creates prediction as admin", async () => {
         svc.create.mockResolvedValue(fakePrediction);
 
         const res = await request(appAdmin)
-            .post("/api/v1/admin/sessions/10/predictions")
+            .post("/api/v1/predictions/admin/sessions/10/predictions")
             .send(validBody);
 
         expect(res.status).toBe(201);
@@ -219,7 +219,7 @@ describe("POST /api/v1/admin/sessions/:sessionId/predictions", () => {
 
     it("returns 403 for non-admin user", async () => {
         const res = await request(appUser)
-            .post("/api/v1/admin/sessions/10/predictions")
+            .post("/api/v1/predictions/admin/sessions/10/predictions")
             .send(validBody);
 
         expect(res.status).toBe(403);
@@ -227,19 +227,19 @@ describe("POST /api/v1/admin/sessions/:sessionId/predictions", () => {
 
     it("returns 422 for invalid type", async () => {
         const res = await request(appAdmin)
-            .post("/api/v1/admin/sessions/10/predictions")
+            .post("/api/v1/predictions/admin/sessions/10/predictions")
             .send({ type: "INVALID_TYPE" });
 
         expect(res.status).toBe(422);
     });
 });
 
-describe("POST /api/v1/admin/predictions/:predictionId/resolve", () => {
+describe("POST /api/v1/predictions/admin/predictions/:predictionId/resolve", () => {
     it("resolves with manual winningValue", async () => {
         svc.resolve.mockResolvedValue({ resolved: 3, awaiting: 0, winningValue: "VER" });
 
         const res = await request(appAdmin)
-            .post("/api/v1/admin/predictions/1/resolve")
+            .post("/api/v1/predictions/admin/predictions/1/resolve")
             .send({ winningValue: "VER" });
 
         expect(res.status).toBe(200);
@@ -251,7 +251,7 @@ describe("POST /api/v1/admin/predictions/:predictionId/resolve", () => {
         svc.resolve.mockResolvedValue({ resolved: 2, awaiting: 0, winningValue: "HAM" });
 
         const res = await request(appAdmin)
-            .post("/api/v1/admin/predictions/1/resolve")
+            .post("/api/v1/predictions/admin/predictions/1/resolve")
             .send({});
 
         expect(res.status).toBe(200);
@@ -262,7 +262,7 @@ describe("POST /api/v1/admin/predictions/:predictionId/resolve", () => {
         svc.resolve.mockResolvedValue({ resolved: 0, awaiting: 5, winningValue: null });
 
         const res = await request(appAdmin)
-            .post("/api/v1/admin/predictions/1/resolve")
+            .post("/api/v1/predictions/admin/predictions/1/resolve")
             .send({});
 
         expect(res.status).toBe(200);

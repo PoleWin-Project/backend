@@ -1,4 +1,5 @@
 import { getHealth } from "./health.service";
+import { appVersion } from "../../config/version";
 
 describe("health.service — getHealth()", () => {
     it("retourne status ok", () => {
@@ -10,8 +11,8 @@ describe("health.service — getHealth()", () => {
         expect(getHealth().service).toBe("PoleWin API");
     });
 
-    it("retourne la version v1", () => {
-        expect(getHealth().version).toBe("v1");
+    it("retourne la version du package", () => {
+        expect(getHealth().version).toBe(appVersion);
     });
 
     it("retourne un uptime numérique >= 0", () => {

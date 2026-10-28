@@ -17,9 +17,11 @@ export class PredictionsRepository {
         });
     }
 
-    findById(id: number) {
+    findById(id: number, tx?: Transaction) {
         return PredictionModel.findByPk(id, {
             include: [{ model: RaceSessionModel, as: "session" }],
+            transaction: tx,
+            ...(tx ? { lock: { level: tx.LOCK.UPDATE, of: PredictionModel } } : {}),
         });
     }
 
@@ -55,10 +57,11 @@ export class PredictionsRepository {
         });
     }
 
-    findAllPronosticsForPrediction(predictionId: number) {
+    findAllPronosticsForPrediction(predictionId: number, tx?: Transaction) {
         return PronosticModel.findAll({
             where: { predictionId },
             include: [{ model: PronosticDetailModel, as: "detail" }],
+            transaction: tx,
         });
     }
 
@@ -94,7 +97,7 @@ export class PredictionsRepository {
     }
 
     findProfileByUserId(userId: number, tx?: Transaction) {
-        return ProfileModel.findOne({ where: { userId }, transaction: tx });
+        return ProfileModel.findOne({ where: { userId }, transaction: tx, lock: tx?.LOCK.UPDATE });
     }
 
     async createPronosticWithDetail(

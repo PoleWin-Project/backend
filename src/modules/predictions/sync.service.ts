@@ -3,68 +3,54 @@ import { RaceSessionModel, PredictionModel } from "../../database/models";
 import { sequelize } from "../../database/sequelize";
 import { logger } from "../../config/logger";
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 export class SyncService {
     constructor(private readonly openf1 = new OpenF1Service()) {}
 
     async syncSeason(year: number) {
-        logger.info(`Starting F1 season sync for ${year}...`);
-        const meetings = await this.openf1.getCalendar(year);
-        
+        const sessions = await this.openf1.getSessions({ year });
         let sessionsCreated = 0;
+        let sessionsUpdated = 0;
         let predictionsCreated = 0;
 
-        for (const meeting of meetings) {
-            await sleep(200); // Small gap between meetings
-            const sessions = await this.openf1.getSessions({ meeting_key: meeting.meeting_key });
-            await sleep(100); // Small gap after sessions fetch
-            
-            for (const s of sessions) {
-                const name = s.session_name.toLowerCase().trim();
-                // "Qualifying" only (not "Sprint Qualifying" / "Sprint Shootout")
-                const isQualifying = name === "qualifying";
-                // "Race" only
-                const isRace = name === "race";
-                // "Sprint" only (the sprint race itself, not the sprint qualifying)
-                const isSprint = name === "sprint";
+        for (const s of sessions) {
+            const name = s.session_name.toLowerCase().trim();
+            const predictionType = name === "qualifying" ? "POLE_POSITION"
+                : name === "race" ? "RACE_WINNER"
+                : name === "sprint" ? "SPRINT_WINNER" : null;
 
-                if (!isQualifying && !isRace && !isSprint) continue;
-
-                let predictionType: "POLE_POSITION" | "RACE_WINNER" | "SPRINT_WINNER";
-                if (isQualifying) predictionType = "POLE_POSITION";
-                else if (isRace) predictionType = "RACE_WINNER";
-                else predictionType = "SPRINT_WINNER";
-
-                await sequelize.transaction(async (tx) => {
-                    const [session, created] = await RaceSessionModel.findOrCreate({
-                        where: { idCourseExternal: s.session_key },
-                        defaults: {
-                            idCourseExternal: s.session_key,
-                            name: `${meeting.meeting_name} - ${s.session_name}`,
-                            type: s.session_name,
-                            dateStart: new Date(s.date_start),
-                        },
-                        transaction: tx,
-                    });
-
-                    if (created) sessionsCreated++;
-
-                    const [, pCreated] = await PredictionModel.findOrCreate({
-                        where: { sessionId: session.id, type: predictionType },
-                        defaults: {
-                            sessionId: session.id,
-                            type: predictionType,
-                            closesAt: session.dateStart,
-                        },
-                        transaction: tx,
-                    });
-                    if (pCreated) predictionsCreated++;
+            await sequelize.transaction(async (tx) => {
+                const details = {
+                    meetingKey: s.meeting_key,
+                    name: `${s.country_name} - ${s.session_name}`,
+                    type: s.session_name,
+                    location: s.location,
+                    dateStart: new Date(s.date_start),
+                };
+                const [session, created] = await RaceSessionModel.findOrCreate({
+                    where: { idCourseExternal: s.session_key },
+                    defaults: { idCourseExternal: s.session_key, ...details },
+                    transaction: tx,
                 });
-            }
+                if (created) sessionsCreated++;
+                else {
+                    await session.update(details, { transaction: tx });
+                    sessionsUpdated++;
+                }
+                if (!predictionType) return;
+
+                const [prediction, pCreated] = await PredictionModel.findOrCreate({
+                    where: { sessionId: session.id, type: predictionType },
+                    defaults: { sessionId: session.id, type: predictionType, closesAt: session.dateStart },
+                    transaction: tx,
+                });
+                if (pCreated) predictionsCreated++;
+                else if (prediction.resultStatus === "pending" && prediction.closesAt?.getTime() !== session.dateStart?.getTime()) {
+                    await prediction.update({ closesAt: session.dateStart }, { transaction: tx });
+                }
+            });
         }
 
-        logger.info(`Sync complete. Created ${sessionsCreated} sessions and ${predictionsCreated} predictions.`);
-        return { sessionsCreated, predictionsCreated };
+        logger.info({ year, sessionsCreated, sessionsUpdated, predictionsCreated }, "F1 season synced");
+        return { sessionsCreated, sessionsUpdated, predictionsCreated, total: sessions.length };
     }
 }

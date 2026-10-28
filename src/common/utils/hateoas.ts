@@ -12,6 +12,8 @@ export function withLinks<T extends object>(data: T, links: HalLinks): T & { _li
 export const rootLinks: HalLinks = {
     self:              { href: "/api/v1",                           method: "GET" },
     docs:              { href: "/api/v1/docs",                      method: "GET" },
+    nextWeekend:       { href: "/api/v1/weekends/next",             method: "GET" },
+    myLeagues:         { href: "/api/v1/leagues/me",                method: "GET" },
     health:            { href: "/api/v1/health",                    method: "GET" },
     register:          { href: "/api/v1/auth/register",             method: "POST" },
     login:             { href: "/api/v1/auth/login",                method: "POST" },

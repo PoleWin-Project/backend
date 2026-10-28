@@ -3,6 +3,7 @@ import { requireAuth } from "../../common/security/requireAuth";
 import { validateQuery } from "../../common/middleware/validate";
 import { LeaderboardQueryDto } from "./leaderboard.dto";
 import { LeaderboardController } from "./leaderboard.controller";
+import { requireLeagueMember } from "../leagues/leagues.access";
 
 const router = Router();
 const ctrl   = new LeaderboardController();
@@ -13,6 +14,7 @@ router.get("/leaderboard/me",  requireAuth, ctrl.getMyRank);
 
 // ── League ────────────────────────────────────────────────────────────────────
 router.get("/leaderboard/leagues/:leagueId",
+    requireAuth, requireLeagueMember,
     validateQuery(LeaderboardQueryDto),
     ctrl.getByLeague,
 );
@@ -24,6 +26,7 @@ router.get("/leaderboard/sessions/:sessionId",
 );
 
 router.get("/leaderboard/sessions/:sessionId/leagues/:leagueId",
+    requireAuth, requireLeagueMember,
     validateQuery(LeaderboardQueryDto),
     ctrl.getBySessionAndLeague,
 );

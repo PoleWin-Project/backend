@@ -48,6 +48,7 @@ export class SessionsRepository {
         let created = 0, updated = 0;
         for (const s of sessions) {
             const defaults = {
+                meetingKey: s.meeting_key,
                 name: `${s.country_name} - ${s.session_name}`,
                 type: s.session_name,
                 location: s.location,

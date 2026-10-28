@@ -48,10 +48,12 @@ export class PredictionsService {
         }
 
         return sequelize.transaction(async (tx) => {
-            const [existing, profile] = await Promise.all([
-                this.repo.findPronosticByUserAndPrediction(userId, predictionId, tx),
-                this.repo.findProfileByUserId(userId, tx),
-            ]);
+            const currentPrediction = await this.repo.findById(predictionId, tx);
+            if (!currentPrediction || currentPrediction.resultStatus === "validated" || (currentPrediction.closesAt && new Date() >= currentPrediction.closesAt)) {
+                throw httpErrors.unprocessableEntity("This prediction is closed");
+            }
+            const profile = await this.repo.findProfileByUserId(userId, tx);
+            const existing = await this.repo.findPronosticByUserAndPrediction(userId, predictionId, tx);
 
             if (existing) throw httpErrors.conflict("You already have a pronostic for this prediction");
             if (!profile) throw httpErrors.unprocessableEntity("Profile not found");
@@ -63,7 +65,7 @@ export class PredictionsService {
 
             await profile.update({ points: profile.points - input.pointsStaked }, { transaction: tx });
 
-            const multiplier = (pred as any).defaultMultiplier ?? 2;
+            const multiplier = currentPrediction.defaultMultiplier;
             const pronostic = await this.repo.createPronosticWithDetail(
                 userId,
                 predictionId,
@@ -86,10 +88,12 @@ export class PredictionsService {
         }
 
         return sequelize.transaction(async (tx) => {
-            const [existing, profile] = await Promise.all([
-                this.repo.findPronosticByUserAndPrediction(userId, predictionId, tx),
-                this.repo.findProfileByUserId(userId, tx),
-            ]);
+            const currentPrediction = await this.repo.findById(predictionId, tx);
+            if (!currentPrediction || currentPrediction.resultStatus === "validated" || (currentPrediction.closesAt && new Date() >= currentPrediction.closesAt)) {
+                throw httpErrors.unprocessableEntity("This prediction is closed");
+            }
+            const profile = await this.repo.findProfileByUserId(userId, tx);
+            const existing = await this.repo.findPronosticByUserAndPrediction(userId, predictionId, tx);
 
             if (!existing) throw httpErrors.notFound("Pronostic not found");
             if (!profile)  throw httpErrors.unprocessableEntity("Profile not found");
@@ -125,10 +129,12 @@ export class PredictionsService {
         }
 
         return sequelize.transaction(async (tx) => {
-            const [pronostic, profile] = await Promise.all([
-                this.repo.findPronosticByUserAndPrediction(userId, predictionId, tx),
-                this.repo.findProfileByUserId(userId, tx),
-            ]);
+            const currentPrediction = await this.repo.findById(predictionId, tx);
+            if (!currentPrediction || currentPrediction.resultStatus === "validated" || (currentPrediction.closesAt && new Date() >= currentPrediction.closesAt)) {
+                throw httpErrors.unprocessableEntity("Cannot cancel after prediction closes");
+            }
+            const profile = await this.repo.findProfileByUserId(userId, tx);
+            const pronostic = await this.repo.findPronosticByUserAndPrediction(userId, predictionId, tx);
 
             if (!pronostic) throw httpErrors.notFound("Pronostic not found");
 
@@ -161,14 +167,6 @@ export class PredictionsService {
     async resolve(predictionId: number, input: ResolveInput) {
         const pred = await this.repo.findById(predictionId);
         if (!pred) throw httpErrors.notFound("Prediction not found");
-
-        const pronostics = await this.repo.findAllPronosticsForPrediction(predictionId);
-        // Include previously unresolved pronostics on retry
-        const toResolve = pronostics.filter(
-            (p) => p.status === "submitted" || p.status === "awaiting_verification",
-        );
-
-        // 1. Determine winning value: manual override → auto-resolve → awaiting
         let winningValue: string | null = input.winningValue ?? null;
 
         if (!winningValue) {
@@ -181,27 +179,37 @@ export class PredictionsService {
             winningValue = await autoResolve(pred.type, sessionKey);
         }
 
-        // 2. Can't determine answer → mark as awaiting admin verification
-        if (!winningValue) {
-            await sequelize.transaction(async (tx) => {
+        return sequelize.transaction(async (tx) => {
+            const locked = await this.repo.findById(predictionId, tx);
+            if (!locked) throw httpErrors.notFound("Prediction not found");
+            if (locked.resultStatus === "validated") {
+                return { resolved: 0, awaiting: 0, winningValue: locked.winningValue };
+            }
+            const pronostics = await this.repo.findAllPronosticsForPrediction(predictionId, tx);
+            const toResolve = pronostics.filter(
+                (p) => p.status === "submitted" || p.status === "awaiting_verification",
+            );
+            if (!winningValue) {
                 for (const pronostic of toResolve) {
                     await pronostic.update({ status: "awaiting_verification" }, { transaction: tx });
                 }
-            });
-            return {
-                resolved: 0,
-                awaiting: toResolve.length,
-                winningValue: null,
-            };
-        }
-
-        // 3. Resolve and distribute points
-        const resolvedValue = winningValue;
-        await sequelize.transaction(async (tx) => {
+                return { resolved: 0, awaiting: toResolve.length, winningValue: null };
+            }
+            const source = input.winningValue ? "admin" : "openf1";
+            const status = input.resultStatus ?? "validated";
+            await locked.update({
+                winningValue,
+                resultSource: source,
+                resultStatus: status,
+                resolvedAt: status === "validated" ? new Date() : null,
+            }, { transaction: tx });
+            if (status === "provisional") {
+                return { resolved: 0, awaiting: toResolve.length, winningValue };
+            }
             for (const pronostic of toResolve) {
                 const userValue = pronostic.detail?.value ?? "";
                 const isWinner = userValue
-                    ? isWinnerForType(pred.type, userValue, resolvedValue)
+                    ? isWinnerForType(pred.type, userValue, winningValue)
                     : false;
                 const multiplier   = pronostic.detail?.multiplier ?? 2;
                 const pointsEarned = isWinner ? Math.floor(pronostic.pointsStaked * multiplier) : 0;
@@ -214,19 +222,11 @@ export class PredictionsService {
                 if (isWinner) {
                     const profile = await this.repo.findProfileByUserId(pronostic.userId, tx);
                     if (profile) {
-                        await profile.update(
-                            { points: profile.points + pointsEarned },
-                            { transaction: tx },
-                        );
+                        await profile.update({ points: profile.points + pointsEarned }, { transaction: tx });
                     }
                 }
             }
+            return { resolved: toResolve.length, awaiting: 0, winningValue };
         });
-
-        return {
-            resolved: toResolve.length,
-            awaiting: 0,
-            winningValue: resolvedValue,
-        };
     }
 }
