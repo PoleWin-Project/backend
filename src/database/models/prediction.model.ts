@@ -11,6 +11,7 @@ import {
 } from "sequelize";
 import type { PronosticModel } from "./pronostic.model";
 import type { RaceSessionModel } from "./raceSession.model";
+import type { PredictionRewardOptionModel } from "./predictionRewardOption.model";
 
 export class PredictionModel extends Model<
 	InferAttributes<PredictionModel>,
@@ -24,15 +25,24 @@ export class PredictionModel extends Model<
 	declare winningValue: string | null;
 	declare createdAt: CreationOptional<Date>;
 
+	// ── Modèle « championship » ──────────────────────────────────────────────
+	declare seasonId: CreationOptional<number | null>;
+	declare rewardRuleVersion: CreationOptional<string | null>;
+	declare resolvedAt: CreationOptional<Date | null>;
+	// Annulation (remplace la suppression physique qui cascadait sur les pronostics).
+	declare voidedAt: CreationOptional<Date | null>;
+
 	declare getSession: BelongsToGetAssociationMixin<RaceSessionModel>;
 	declare getPronostics: HasManyGetAssociationsMixin<PronosticModel>;
 
 	declare session?: RaceSessionModel;
 	declare pronostics?: PronosticModel[];
+	declare rewardOptions?: PredictionRewardOptionModel[];
 
 	declare static associations: {
 		session: Association<PredictionModel, RaceSessionModel>;
 		pronostics: Association<PredictionModel, PronosticModel>;
+		rewardOptions: Association<PredictionModel, PredictionRewardOptionModel>;
 	};
 
 	static initModel(sequelize: Sequelize) {
@@ -48,6 +58,10 @@ export class PredictionModel extends Model<
 				scope: { type: DataTypes.STRING, allowNull: true },
 				closesAt: { type: DataTypes.DATE, allowNull: true, field: "closes_at" },
 				winningValue: { type: DataTypes.STRING, allowNull: true, field: "winning_value" },
+				seasonId: { type: DataTypes.INTEGER, allowNull: true, field: "season_id" },
+				rewardRuleVersion: { type: DataTypes.STRING(32), allowNull: true, field: "reward_rule_version" },
+				resolvedAt: { type: DataTypes.DATE, allowNull: true, field: "resolved_at" },
+				voidedAt: { type: DataTypes.DATE, allowNull: true, field: "voided_at" },
 				createdAt: {
 					type: DataTypes.DATE,
 					allowNull: false,

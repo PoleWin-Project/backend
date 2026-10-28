@@ -1,8 +1,10 @@
+import { withPublicAvatars } from "../paddock/publicAvatars";
 import { NextFunction, Request, Response } from "express";
 import { FriendsService } from "./friends.service";
 import { emitToUser } from "../../socket/ws.handler";
 import { notifyUser } from "../push/push.service";
 import { UserModel } from "../../database/models";
+import { withSeasonPoints } from "../championship/scoreSummary";
 
 export class FriendsController {
     constructor(private readonly service = new FriendsService()) {}
@@ -87,21 +89,21 @@ export class FriendsController {
     listIncoming = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const items = await this.service.listIncoming(req.user!.id);
-            res.json({ status: "ok", items });
+            res.json({ status: "ok", items: await withPublicAvatars(await withSeasonPoints(items)) });
         } catch (e) { next(e); }
     };
 
     listOutgoing = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const items = await this.service.listOutgoing(req.user!.id);
-            res.json({ status: "ok", items });
+            res.json({ status: "ok", items: await withPublicAvatars(await withSeasonPoints(items)) });
         } catch (e) { next(e); }
     };
 
     listFriends = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const items = await this.service.listFriends(req.user!.id);
-            res.json({ status: "ok", items });
+            res.json({ status: "ok", items: await withPublicAvatars(await withSeasonPoints(items)) });
         } catch (e) { next(e); }
     };
 

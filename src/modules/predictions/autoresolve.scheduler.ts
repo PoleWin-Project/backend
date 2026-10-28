@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import { logger } from "../../config/logger";
+import { env } from "../../config/env";
 import { PredictionModel, PronosticModel, RaceSessionModel } from "../../database/models";
 import { PredictionsService } from "./predictions.service";
 
@@ -12,6 +13,12 @@ class AutoResolveScheduler {
 
     start(): void {
         if (this.timer) return;
+        // Coupé pendant la fenêtre de bascule (AUTORESOLVE_ENABLED=false) pour que les
+        // pronostics ouverts soient traités uniquement par le script de migration.
+        if (!env.autoresolveEnabled) {
+            logger.warn("AutoResolveScheduler disabled (AUTORESOLVE_ENABLED=false)");
+            return;
+        }
         logger.info("AutoResolveScheduler started (interval: 5 min)");
         void this.run();
         this.timer = setInterval(() => void this.run(), INTERVAL_MS);
@@ -26,7 +33,10 @@ class AutoResolveScheduler {
     }
 
     private async run(): Promise<void> {
-        if (this.running) return; // prevent overlapping runs
+        // Verrou mémoire : évite deux passes simultanées dans CE process. Entre plusieurs
+        // instances, c'est PredictionsService.resolve (verrou consultatif Postgres +
+        // changement de statut conditionnel) qui garantit l'absence de double attribution.
+        if (this.running) return;
         this.running = true;
 
         try {

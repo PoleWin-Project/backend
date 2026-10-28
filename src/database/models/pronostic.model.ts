@@ -24,6 +24,20 @@ export class PronosticModel extends Model<
 	declare pointsEarned: CreationOptional<number>;
 	declare status: CreationOptional<string>;
 
+	// ── Modèle « championship » (sans mise) ─────────────────────────────────
+	// 'legacy_stake' = ancien pari de la Saison Bêta (pointsStaked / pointsEarned) ;
+	// 'fixed_reward' = nouveau pronostic gratuit à récompense fixe.
+	declare scoringModel: CreationOptional<"legacy_stake" | "fixed_reward">;
+	declare seasonId: CreationOptional<number | null>;
+	// Récompense figée au moment de la validation (jamais recalculée ensuite).
+	declare rewardPointsSnapshot: CreationOptional<number | null>;
+	declare partialRewardPointsSnapshot: CreationOptional<number | null>;
+	declare rewardRuleVersion: CreationOptional<string | null>;
+	declare submittedAt: CreationOptional<Date | null>;
+	declare resolvedAt: CreationOptional<Date | null>;
+	// Points de championnat effectivement attribués (0 si incorrect, jamais négatif).
+	declare championshipPointsAwarded: CreationOptional<number>;
+
 	declare getUser: BelongsToGetAssociationMixin<UserModel>;
 	declare getPrediction: BelongsToGetAssociationMixin<PredictionModel>;
 	declare getDetail: HasOneGetAssociationMixin<PronosticDetailModel>;
@@ -57,6 +71,28 @@ export class PronosticModel extends Model<
 					field: "points_earned",
 				},
 				status: { type: DataTypes.STRING, allowNull: false, defaultValue: "draft" },
+				scoringModel: {
+					type: DataTypes.STRING(16),
+					allowNull: false,
+					defaultValue: "legacy_stake",
+					field: "scoring_model",
+				},
+				seasonId: { type: DataTypes.INTEGER, allowNull: true, field: "season_id" },
+				rewardPointsSnapshot: { type: DataTypes.INTEGER, allowNull: true, field: "reward_points_snapshot" },
+				partialRewardPointsSnapshot: {
+					type: DataTypes.INTEGER,
+					allowNull: true,
+					field: "partial_reward_points_snapshot",
+				},
+				rewardRuleVersion: { type: DataTypes.STRING(32), allowNull: true, field: "reward_rule_version" },
+				submittedAt: { type: DataTypes.DATE, allowNull: true, field: "submitted_at" },
+				resolvedAt: { type: DataTypes.DATE, allowNull: true, field: "resolved_at" },
+				championshipPointsAwarded: {
+					type: DataTypes.INTEGER,
+					allowNull: false,
+					defaultValue: 0,
+					field: "championship_points_awarded",
+				},
 			},
 			{
 				sequelize,

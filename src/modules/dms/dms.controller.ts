@@ -1,3 +1,4 @@
+import { withPublicAvatars } from "../paddock/publicAvatars";
 import { NextFunction, Request, Response } from "express";
 import { DmsService } from "./dms.service";
 import { ListDmsQuery } from "./dms.dto";
@@ -41,14 +42,14 @@ export class DmsController {
             // Mark their messages as read
             await this.service.markRead(userId, otherId);
             const messages = await this.service.listConversation(userId, otherId, req.query as unknown as ListDmsQuery);
-            res.json({ status: "ok", messages });
+            res.json({ status: "ok", messages: await withPublicAvatars(messages) });
         } catch (e) { next(e); }
     };
 
     listConversations = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const items = await this.service.listConversations(req.user!.id);
-            res.json({ status: "ok", items });
+            res.json({ status: "ok", items: await withPublicAvatars(items) });
         } catch (e) { next(e); }
     };
 

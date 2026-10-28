@@ -13,6 +13,12 @@ jest.mock("./sessions.repository", () => ({
     SessionsRepository: jest.fn().mockImplementation(() => mockRepo),
 }));
 
+// Garde-fou anti-cascade : nombre de pronostics rattachés à la session supprimée.
+const mockCountPronostics = jest.fn().mockResolvedValue(0);
+jest.mock("../predictions/predictions.repository", () => ({
+    countPronosticsForSession: (...args: unknown[]) => mockCountPronostics(...args),
+}));
+
 const mockGetSessions = jest.fn();
 jest.mock("../openf1/openf1.service", () => ({
     OpenF1Service: jest.fn().mockImplementation(() => ({ getSessions: mockGetSessions })),
@@ -156,6 +162,13 @@ describe("SessionsService", () => {
             mockRepo.delete.mockResolvedValue(false);
 
             await expect(service.delete(99)).rejects.toMatchObject({ statusCode: 404 });
+        });
+
+        it("refuses (409) to delete a session that has pronostics", async () => {
+            mockCountPronostics.mockResolvedValueOnce(3);
+
+            await expect(service.delete(1)).rejects.toMatchObject({ statusCode: 409 });
+            expect(mockRepo.delete).not.toHaveBeenCalled();
         });
     });
 });

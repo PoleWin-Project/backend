@@ -21,6 +21,8 @@ export class BadgeModel extends Model<
 	declare description: string | null;
 	declare imageUrl: string | null;
 	declare rarity: string | null;
+	// Badge masqué de l'interface (ex. badges liés à l'ancienne mécanique de mise).
+	declare isHidden: CreationOptional<boolean>;
 	declare createdAt: CreationOptional<Date>;
 
 	declare getRules: HasManyGetAssociationsMixin<BadgeRuleModel>;
@@ -43,6 +45,7 @@ export class BadgeModel extends Model<
 				description: { type: DataTypes.TEXT, allowNull: true },
 				imageUrl: { type: DataTypes.STRING, allowNull: true, field: "image_url" },
 				rarity: { type: DataTypes.STRING, allowNull: true },
+				isHidden: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: "is_hidden" },
 				createdAt: {
 					type: DataTypes.DATE,
 					allowNull: false,

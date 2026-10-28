@@ -34,6 +34,19 @@ const EnvSchema = z.object({
 
     // App
     APP_URL:                z.string().default("http://localhost:3000"),
+
+    // ── Migration « no simulated gambling » (cf. MIGRATION_SIMULATED_GAMBLING_PLAN.md) ──
+    // legacy       : ancien modèle (mise débitée sur profiles.points, gain = mise × multiplicateur)
+    // championship : nouveau modèle (aucune mise, récompense fixe snapshotée, points de
+    //                championnat par saison, mini-jeux → crédits Garage)
+    SCORING_MODEL:          z.enum(["legacy", "championship"]).default("legacy"),
+    // Gel des écritures de pronostics (fenêtre de maintenance de la bascule).
+    PREDICTIONS_FROZEN:     z.enum(["true", "false"]).default("false"),
+    // Permet de couper le scheduler de résolution automatique pendant la bascule.
+    AUTORESOLVE_ENABLED:    z.enum(["true", "false"]).default("true"),
+    // Comportement face à un ancien client qui envoie encore `pointsStaked` en mode
+    // championship : "accept" = la mise est ignorée, "reject" = 426 Upgrade Required.
+    LEGACY_CLIENT_POLICY:   z.enum(["accept", "reject"]).default("accept"),
 });
 
 const result = EnvSchema.safeParse(process.env);
@@ -64,4 +77,11 @@ export const env = {
     resendApiKey:          d.RESEND_API_KEY,
     emailFrom:             d.SMTP_FROM,
     appUrl:                d.APP_URL,
+    scoringModel:          d.SCORING_MODEL,
+    predictionsFrozen:     d.PREDICTIONS_FROZEN === "true",
+    autoresolveEnabled:    d.AUTORESOLVE_ENABLED === "true",
+    legacyClientPolicy:    d.LEGACY_CLIENT_POLICY,
 };
+
+/** Raccourci lisible pour les branches de code dépendant du modèle de score. */
+export const isChampionshipMode = () => env.scoringModel === "championship";

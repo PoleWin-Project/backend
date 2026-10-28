@@ -73,18 +73,20 @@ export class SessionsRepository {
                     where: { sessionId: session.id, winningValue: null },
                     transaction,
                 });
-                const type = ({
-                    qualifying: "POLE_POSITION",
-                    race: "RACE_WINNER",
-                    sprint: "SPRINT_WINNER",
+                const types = ({
+                    qualifying: ["POLE_POSITION"],
+                    race: ["RACE_WINNER", "PODIUM", "FASTEST_LAP", "DNF", "SAFETY_CAR"],
+                    sprint: ["SPRINT_WINNER"],
                 } as const)[s.session_name.toLowerCase().trim() as "qualifying" | "race" | "sprint"];
-                if (type && defaults.dateStart.getTime() > Date.now()) {
-                    const [, predictionCreated] = await PredictionModel.findOrCreate({
-                        where: { sessionId: session.id, type },
-                        defaults: { sessionId: session.id, type, closesAt: defaults.dateStart },
-                        transaction,
-                    });
-                    if (predictionCreated) predictionsCreated++;
+                if (types && defaults.dateStart.getTime() > Date.now()) {
+                    for (const type of types) {
+                        const [, predictionCreated] = await PredictionModel.findOrCreate({
+                            where: { sessionId: session.id, type },
+                            defaults: { sessionId: session.id, type, closesAt: defaults.dateStart },
+                            transaction,
+                        });
+                        if (predictionCreated) predictionsCreated++;
+                    }
                 }
             });
         }
