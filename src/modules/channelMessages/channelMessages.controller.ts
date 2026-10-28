@@ -1,3 +1,4 @@
+import { withPublicAvatars } from "../paddock/publicAvatars";
 import { NextFunction, Request, Response } from "express";
 import { httpErrors } from "../../common/errors/http";
 import { ListChannelMessagesQuery } from "./channelMessages.dto";
@@ -18,7 +19,7 @@ export class ChannelMessagesController {
         try {
             const channelMessageId = parsePositiveInt(req.params.id, "channel_message id");
             const channelMessage = await this.service.getById(channelMessageId);
-            return res.json({ status: "ok", channelMessage });
+            return res.json({ status: "ok", channelMessage: await withPublicAvatars(channelMessage) });
         } catch (e) {
             next(e);
         }
@@ -28,7 +29,7 @@ export class ChannelMessagesController {
         try {
             const channelId = parsePositiveInt(req.params.channelId, "channel id");
             const data = await this.service.listByChannel(channelId, req.query as unknown as ListChannelMessagesQuery);
-            return res.json({ status: "ok", ...data });
+            return res.json({ status: "ok", ...await withPublicAvatars(data) });
         } catch (e) {
             next(e);
         }
@@ -39,7 +40,7 @@ export class ChannelMessagesController {
             const channelId = parsePositiveInt(req.params.channelId, "channel id");
             const senderId = req.user!.id;
             const channelMessage = await this.service.create(channelId, senderId, req.body);
-            return res.status(201).json({ status: "ok", channelMessage });
+            return res.status(201).json({ status: "ok", channelMessage: await withPublicAvatars(channelMessage) });
         } catch (e) {
             next(e);
         }

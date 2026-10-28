@@ -10,6 +10,9 @@ jest.mock('../../database/models', () => ({
 jest.mock('../../database/sequelize', () => ({
     sequelize: { transaction: jest.fn() },
 }));
+jest.mock('../championship/scoreSummary', () => ({
+    getScoreFields: jest.fn().mockResolvedValue({ points: 0, championshipPoints: 0, garageCredits: 0 }),
+}));
 jest.mock('../../common/utils/password', () => ({ hashPassword: jest.fn().mockResolvedValue('hash') }));
 jest.mock('../../common/utils/jwt', () => ({
     signAccessToken: jest.fn().mockReturnValue('access'),

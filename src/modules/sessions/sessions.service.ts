@@ -4,6 +4,7 @@ import { CreateSessionInput, ListSessionsQuery, UpdateSessionInput } from "./ses
 import { OpenF1Service } from "../openf1/openf1.service";
 
 import { logger } from "../../config/logger";
+import { countPronosticsForSession } from "../predictions/predictions.repository";
 
 export class SessionsService {
     private refreshedAt = 0;
@@ -52,6 +53,14 @@ export class SessionsService {
     }
 
     async delete(id: number) {
+        // Garde-fou : race_sessions → predictions → pronostics est en ON DELETE CASCADE.
+        const pronostics = await countPronosticsForSession(id);
+        if (pronostics > 0) {
+            throw httpErrors.conflict(
+                `Session has ${pronostics} pronostic(s) and cannot be deleted`,
+                "SESSION_HAS_PRONOSTICS",
+            );
+        }
         const deleted = await this.repo.delete(id);
         if (!deleted) throw httpErrors.notFound("Session not found");
     }

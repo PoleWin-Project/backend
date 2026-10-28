@@ -7,6 +7,7 @@ import { hashPassword } from "../../common/utils/password";
 import { signAccessToken, signRefreshToken } from "../../common/utils/jwt";
 import { AuthUser } from "../../common/security/auth.types";
 import { sequelize } from "../../database/sequelize";
+import { getScoreFields } from "../championship/scoreSummary";
 
 const googleClient = new OAuth2Client();
 
@@ -93,7 +94,7 @@ export async function processSocialLogin(
             username: user.username,
             isEmailVerified: user.isEmailVerified,
             roles,
-            points: user.profile?.points ?? 0,
+            ...(await getScoreFields(user.id, user.profile?.points ?? 0)),
             profile: {
                 favoriteTeamCode: user.profile?.favoriteTeamCode ?? null,
                 favoriteDriverCode: user.profile?.favoriteDriverCode ?? null,

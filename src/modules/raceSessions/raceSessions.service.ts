@@ -7,6 +7,7 @@ import {
     UpdateRaceSessionInput,
 } from "./raceSessions.dto";
 import { RaceSessionsRepository } from "./raceSessions.repository";
+import { countPronosticsForSession } from "../predictions/predictions.repository";
 
 export class RaceSessionsService {
     constructor(
@@ -45,6 +46,14 @@ export class RaceSessionsService {
     }
 
     async delete(id: number) {
+        // Garde-fou : race_sessions → predictions → pronostics est en ON DELETE CASCADE.
+        const pronostics = await countPronosticsForSession(id);
+        if (pronostics > 0) {
+            throw httpErrors.conflict(
+                `Session has ${pronostics} pronostic(s) and cannot be deleted`,
+                "SESSION_HAS_PRONOSTICS",
+            );
+        }
         const deleted = await this.repo.delete(id);
         if (!deleted) throw httpErrors.notFound("Race session not found");
     }

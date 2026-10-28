@@ -39,6 +39,14 @@ export class PredictionsController {
         } catch (e) { next(e); }
     };
 
+    /** Admin : annule une prédiction (remplace la suppression destructrice). */
+    voidPrediction = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const result = await this.service.voidPrediction(Number(req.params.predictionId));
+            res.json({ status: "ok", ...result });
+        } catch (e) { next(e); }
+    };
+
     placePronostic = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const pronostic = await this.service.placePronostic(

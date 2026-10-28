@@ -17,6 +17,13 @@ import { BadgeRuleModel } from "./badgeRule.model";
 import { UserBadgeModel } from "./userBadge.model";
 import { GamePlayModel } from "./gamePlay.model";
 import { PushTokenModel } from "./pushToken.model";
+import { SeasonModel } from "./season.model";
+import { PredictionRewardOptionModel } from "./predictionRewardOption.model";
+import { ChampionshipScoreEventModel } from "./championshipScoreEvent.model";
+import { SeasonScoreModel } from "./seasonScore.model";
+import { SeasonFinalStandingModel } from "./seasonFinalStanding.model";
+import { GarageWalletModel } from "./garageWallet.model";
+import { GarageTransactionModel } from "./garageTransaction.model";
 
 export function initModels(sequelize: Sequelize) {
 
@@ -37,6 +44,15 @@ export function initModels(sequelize: Sequelize) {
 	UserBadgeModel.initModel(sequelize);
 	GamePlayModel.initModel(sequelize);
 	PushTokenModel.initModel(sequelize);
+
+	// Migration « no simulated gambling » : championnat par saison + crédits Garage.
+	SeasonModel.initModel(sequelize);
+	PredictionRewardOptionModel.initModel(sequelize);
+	ChampionshipScoreEventModel.initModel(sequelize);
+	SeasonScoreModel.initModel(sequelize);
+	SeasonFinalStandingModel.initModel(sequelize);
+	GarageWalletModel.initModel(sequelize);
+	GarageTransactionModel.initModel(sequelize);
 
 	UserModel.hasOne(ProfileModel, { as: "profile", foreignKey: "userId" });
 	ProfileModel.belongsTo(UserModel, { as: "user", foreignKey: "userId" });
@@ -96,6 +112,19 @@ export function initModels(sequelize: Sequelize) {
 	UserModel.hasMany(PushTokenModel, { as: "pushTokens", foreignKey: "userId" });
 	PushTokenModel.belongsTo(UserModel, { as: "user", foreignKey: "userId" });
 
+	PredictionModel.hasMany(PredictionRewardOptionModel, { as: "rewardOptions", foreignKey: "predictionId" });
+	PredictionRewardOptionModel.belongsTo(PredictionModel, { as: "prediction", foreignKey: "predictionId" });
+
+	SeasonModel.hasMany(SeasonScoreModel, { as: "scores", foreignKey: "seasonId" });
+	SeasonScoreModel.belongsTo(SeasonModel, { as: "season", foreignKey: "seasonId" });
+	SeasonScoreModel.belongsTo(UserModel, { as: "user", foreignKey: "userId" });
+
+	SeasonFinalStandingModel.belongsTo(SeasonModel, { as: "season", foreignKey: "seasonId" });
+	SeasonFinalStandingModel.belongsTo(UserModel, { as: "user", foreignKey: "userId" });
+
+	UserModel.hasOne(GarageWalletModel, { as: "garageWallet", foreignKey: "userId" });
+	GarageWalletModel.belongsTo(UserModel, { as: "user", foreignKey: "userId" });
+
 	return {
 		UserModel,
 		ProfileModel,
@@ -114,5 +143,12 @@ export function initModels(sequelize: Sequelize) {
 		UserBadgeModel,
 		GamePlayModel,
 		PushTokenModel,
+		SeasonModel,
+		PredictionRewardOptionModel,
+		ChampionshipScoreEventModel,
+		SeasonScoreModel,
+		SeasonFinalStandingModel,
+		GarageWalletModel,
+		GarageTransactionModel,
 	};
 }
