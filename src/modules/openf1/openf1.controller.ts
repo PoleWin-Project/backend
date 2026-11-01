@@ -72,7 +72,7 @@ export class OpenF1Controller {
     getDrivers = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const sk = req.params.sessionKey === "latest" ? "latest" : Number(req.params.sessionKey);
-            const drivers = await this.service.getDrivers(sk);
+            const drivers = await this.service.getDriversWithFallback(sk);
             res.json({ status: "ok", drivers });
         } catch (e) {
             next(e);
