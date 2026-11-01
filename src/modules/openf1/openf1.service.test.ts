@@ -128,6 +128,123 @@ describe("OpenF1Service", () => {
         });
     });
 
+    describe("getDriversWithFallback()", () => {
+        it("utilise directement le classement pour une session future", async () => {
+            const futureSession = { ...fakeSession, date_start: "2999-09-01T13:00:00+00:00" };
+            jest.spyOn(service, "getSessionByKey").mockResolvedValue(futureSession);
+            jest.spyOn(service, "getSessions").mockResolvedValue([]);
+            const directDrivers = jest.spyOn(service, "getDrivers");
+            jest.spyOn(service, "getDriverStandings").mockResolvedValue([
+                { driver_number: 16, driver: fakeDriver },
+            ]);
+
+            const result = await service.getDriversWithFallback(futureSession.session_key);
+
+            expect(result).toEqual([fakeDriver]);
+            expect(directDrivers).not.toHaveBeenCalled();
+        });
+
+        it("reprend la grille de la session précédente lors d'un remplacement", async () => {
+            const futureRace = { ...fakeSession, session_key: 11404, date_start: "2999-09-01T13:00:00+00:00" };
+            const qualifying = { ...fakeSession, session_key: 11400, date_start: "2026-10-31T21:00:00+00:00" };
+            const hirakawa: OpenF1Driver = {
+                ...fakeDriver,
+                driver_number: 50,
+                full_name: "Ryo HIRAKAWA",
+                name_acronym: "HIR",
+                session_key: 11400,
+                team_name: "Haas F1 Team",
+            };
+            jest.spyOn(service, "getSessionByKey").mockResolvedValue(futureRace);
+            jest.spyOn(service, "getSessions").mockResolvedValue([qualifying, futureRace]);
+            jest.spyOn(service, "getDrivers").mockResolvedValue([hirakawa]);
+            const standings = jest.spyOn(service, "getDriverStandings");
+
+            const result = await service.getDriversWithFallback(futureRace.session_key);
+
+            expect(result).toEqual([hirakawa]);
+            expect(service.getDrivers).toHaveBeenCalledWith(qualifying.session_key);
+            expect(standings).not.toHaveBeenCalled();
+        });
+
+        it("retombe sur le classement si la source session échoue", async () => {
+            jest.spyOn(service, "getSessionByKey").mockRejectedValue(new Error("OpenF1 unavailable"));
+            jest.spyOn(service, "getDrivers").mockRejectedValue(new Error("OpenF1 unavailable"));
+            jest.spyOn(service, "getDriverStandings").mockResolvedValue([
+                { driver_number: 16, driver: fakeDriver },
+            ]);
+
+            const result = await service.getDriversWithFallback(fakeSession.session_key);
+
+            expect(result).toEqual([fakeDriver]);
+        });
+    });
+
+    describe("getDriverStandings()", () => {
+        it("conserve le classement si l'enrichissement OpenF1 échoue", async () => {
+            const warnMock = jest.spyOn(console, "warn").mockImplementation(() => {});
+            const fetchMock = jest.spyOn(global, "fetch").mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    MRData: {
+                        StandingsTable: {
+                            StandingsLists: [{
+                                DriverStandings: [{
+                                    position: "1",
+                                    points: "25",
+                                    wins: "1",
+                                    Driver: {
+                                        permanentNumber: "16",
+                                        givenName: "Charles",
+                                        familyName: "Leclerc",
+                                        code: "LEC",
+                                        nationality: "Monegasque",
+                                        driverId: "leclerc",
+                                    },
+                                    Constructors: [{ name: "Ferrari" }],
+                                }, {
+                                    position: "2",
+                                    points: "10",
+                                    wins: "0",
+                                    Driver: {
+                                        givenName: "Ryo",
+                                        familyName: "Hirakawa",
+                                        nationality: "Japanese",
+                                        driverId: "ryo_hirakawa",
+                                    },
+                                    Constructors: [{ name: "Haas F1 Team" }],
+                                }],
+                            }],
+                        },
+                    },
+                }),
+            } as any);
+            const hirakawa: OpenF1Driver = {
+                ...fakeDriver,
+                driver_number: 50,
+                full_name: "Ryo Hirakawa",
+                name_acronym: "HIR",
+                team_name: "Haas F1 Team",
+            };
+            jest.spyOn(service, "getLatestSession").mockResolvedValue(fakeSession);
+            jest.spyOn(service, "getDrivers").mockResolvedValue([hirakawa]);
+
+            const result = await service.getDriverStandings(2026);
+
+            expect(result).toHaveLength(2);
+            expect(result[0]).toMatchObject({
+                driver_number: 16,
+                driver: { full_name: "Charles Leclerc", name_acronym: "LEC", team_name: "Ferrari" },
+            });
+            expect(result[1]).toMatchObject({
+                driver_number: 50,
+                driver: { full_name: "Ryo Hirakawa", name_acronym: "HIR", driver_id: "ryo_hirakawa" },
+            });
+            fetchMock.mockRestore();
+            warnMock.mockRestore();
+        });
+    });
+
     describe("getRaceControl()", () => {
         it("retourne les événements race control", async () => {
             mockGet.mockResolvedValue([fakeRaceControl]);

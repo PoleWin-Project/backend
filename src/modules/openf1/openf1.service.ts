@@ -32,6 +32,90 @@ export class OpenF1Service {
         return openf1Client.get<OpenF1Driver[]>("/drivers", { session_key: sessionKey });
     }
 
+    /**
+     * OpenF1 ne publie pas toujours `/drivers` avant le début d'une session.
+     * L'endpoint public doit malgré tout fournir la grille pour les pronostics.
+     */
+    async getDriversWithFallback(sessionKey: number | "latest"): Promise<OpenF1Driver[]> {
+        let session: OpenF1Session | null = null;
+
+        if (typeof sessionKey === "number") {
+            try {
+                session = await this.getSessionByKey(sessionKey);
+            } catch {
+                // On tentera tout de même la source directe puis le classement.
+            }
+        }
+
+        const isFutureSession = session
+            ? new Date(session.date_start).getTime() > Date.now()
+            : false;
+
+        if (isFutureSession && session) {
+            try {
+                const meetingSessions = await this.getSessions({
+                    meeting_key: session.meeting_key,
+                    year: session.year,
+                });
+                const previousSessions = meetingSessions
+                    .filter(candidate => (
+                        candidate.session_key !== sessionKey
+                        && new Date(candidate.date_start).getTime() <= Date.now()
+                    ))
+                    .sort((a, b) => b.date_start.localeCompare(a.date_start));
+
+                for (const previousSession of previousSessions) {
+                    try {
+                        const drivers = await this.getDrivers(previousSession.session_key);
+                        if (drivers.length > 0) return drivers;
+                    } catch {
+                        // Essaie la session précédente du même week-end.
+                    }
+                }
+            } catch {
+                // Le classement saisonnier reste le dernier recours.
+            }
+        }
+
+        if (!isFutureSession) {
+            try {
+                const drivers = await this.getDrivers(sessionKey);
+                if (drivers.length > 0) return drivers;
+            } catch {
+                // Une erreur de la source session ne doit pas devenir une 500.
+            }
+        }
+
+        const standings = await this.getDriverStandings(session?.year);
+        const targetSessionKey = typeof sessionKey === "number" ? sessionKey : 0;
+
+        return standings
+            .map((standing: any): OpenF1Driver | null => {
+                const driver = standing.driver;
+                if (!driver?.name_acronym || !standing.driver_number) return null;
+
+                const nameParts = String(driver.full_name || driver.name_acronym).trim().split(/\s+/);
+                const firstName = driver.first_name || nameParts.slice(0, -1).join(" ");
+                const lastName = driver.last_name || nameParts[nameParts.length - 1] || driver.name_acronym;
+
+                return {
+                    broadcast_name: driver.broadcast_name || `${firstName.charAt(0)} ${lastName}`.trim(),
+                    country_code: driver.country_code || "",
+                    driver_number: Number(standing.driver_number),
+                    first_name: firstName,
+                    full_name: driver.full_name || driver.name_acronym,
+                    headshot_url: driver.headshot_url || null,
+                    last_name: lastName,
+                    meeting_key: driver.meeting_key || session?.meeting_key || 0,
+                    name_acronym: driver.name_acronym,
+                    session_key: driver.session_key || targetSessionKey,
+                    team_colour: driver.team_colour || "FFFFFF",
+                    team_name: driver.team_name || "",
+                };
+            })
+            .filter((driver: OpenF1Driver | null): driver is OpenF1Driver => driver !== null);
+    }
+
     async getRaceControl(sessionKey: number): Promise<OpenF1RaceControl[]> {
         return openf1Client.get<OpenF1RaceControl[]>("/race_control", { session_key: sessionKey });
     }
@@ -197,24 +281,41 @@ export class OpenF1Service {
             
             const standings = data.MRData.StandingsTable.StandingsLists[0]?.DriverStandings || [];
             
-            const latestSession = await this.getLatestSession();
-            let driversMap = new Map();
-            if (latestSession) {
-                const drivers = await this.getDrivers(latestSession.session_key);
-                driversMap = new Map(drivers.map(d => [d.driver_number, d]));
+            let driversMap = new Map<number, OpenF1Driver>();
+            let driversByName = new Map<string, OpenF1Driver>();
+            try {
+                const latestSession = await this.getLatestSession();
+                if (latestSession) {
+                    const drivers = await this.getDrivers(latestSession.session_key);
+                    driversMap = new Map(drivers.map(d => [d.driver_number, d]));
+                    driversByName = new Map(drivers.map(d => [d.full_name.trim().toLowerCase(), d]));
+                }
+            } catch (error) {
+                // Le classement Jolpica reste exploitable sans les métadonnées
+                // facultatives d'OpenF1 (photo, couleur exacte, etc.).
+                console.warn("[OpenF1Service] Driver enrichment unavailable:", error);
             }
 
             return standings.map((s: any) => {
-                const num = Number(s.Driver.permanentNumber);
+                const rawNumber = s.Driver.permanentNumber;
+                const parsedNumber = rawNumber === null || rawNumber === undefined || rawNumber === ""
+                    ? null
+                    : Number(rawNumber);
+                const permanentNumber = parsedNumber !== null && Number.isFinite(parsedNumber) ? parsedNumber : null;
+                const fullName = `${s.Driver.givenName} ${s.Driver.familyName}`.trim();
+                const liveDriver = permanentNumber !== null
+                    ? driversMap.get(permanentNumber)
+                    : driversByName.get(fullName.toLowerCase());
+                const num = permanentNumber ?? liveDriver?.driver_number ?? null;
                 return {
                     driver_number: num,
                     position: Number(s.position),
                     points: Number(s.points),
                     wins: Number(s.wins),
                     driver: {
-                        ...(driversMap.get(num) || {}),
-                        full_name: `${s.Driver.givenName} ${s.Driver.familyName}`,
-                        name_acronym: s.Driver.code,
+                        ...(liveDriver || {}),
+                        full_name: fullName,
+                        name_acronym: s.Driver.code || liveDriver?.name_acronym,
                         team_name: s.Constructors[0]?.name,
                         nationality: s.Driver.nationality,
                         driver_id: s.Driver.driverId
