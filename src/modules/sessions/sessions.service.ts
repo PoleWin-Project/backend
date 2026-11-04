@@ -13,7 +13,24 @@ export class SessionsService {
     constructor(private readonly repo = new SessionsRepository()) {}
 
     async list(query: ListSessionsQuery) {
-        if (query.upcoming) await this.refreshCalendar();
+        if (!query.upcoming) {
+            const { rows, count } = await this.repo.findAll(query);
+            return { items: rows, total: count, limit: query.limit, offset: query.offset };
+        }
+
+        // Le calendrier stocké en base est la source immédiate de l'application.
+        // OpenF1 est rafraîchi en arrière-plan afin qu'une API externe lente ne
+        // bloque plus l'ouverture de l'écran des pronostics.
+        const stored = await this.repo.findAll(query);
+        if (stored.count > 0) {
+            void this.refreshCalendar();
+            return { items: stored.rows, total: stored.count, limit: query.limit, offset: query.offset };
+        }
+
+        // Une base fraîchement installée n'a encore aucune donnée de secours.
+        // Dans ce seul cas, on attend la première synchronisation pour amorcer
+        // le calendrier au lieu de renvoyer définitivement une liste vide.
+        await this.refreshCalendar();
         const { rows, count } = await this.repo.findAll(query);
         return { items: rows, total: count, limit: query.limit, offset: query.offset };
     }
@@ -28,7 +45,7 @@ export class SessionsService {
                     this.refreshedAt = Date.now();
                 })
                 .catch(err => {
-                    // Keep the stored calendar available during an OpenF1 outage.
+                    // Conserver le calendrier stocké pendant une panne OpenF1.
                     logger.warn({ err }, "Calendar refresh failed; using stored sessions");
                 })
                 .finally(() => { this.refreshInFlight = null; });

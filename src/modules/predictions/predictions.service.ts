@@ -65,6 +65,63 @@ export class PredictionsService {
 
     // ── Lecture ──────────────────────────────────────────────────────────────
 
+    async getCurrentWeekend(userId: number) {
+        const rows = await this.repo.findCurrentWeekend(userId);
+        if (!rows.length) return null;
+
+        const sessions = rows.map((row: any) => {
+            const session = typeof row.toJSON === "function" ? row.toJSON() : row;
+            const predictions = (session.predictions ?? [])
+                .filter((prediction: any) => !isChampionshipMode() || !prediction.voidedAt)
+                .sort((a: any, b: any) => Number(a.id) - Number(b.id))
+                .map((prediction: any) => {
+                    const pronostic = prediction.pronostics?.[0] ?? null;
+                    return {
+                        id: prediction.id,
+                        sessionId: prediction.sessionId,
+                        type: prediction.type,
+                        closesAt: prediction.closesAt,
+                        winningValue: prediction.winningValue,
+                        rewardOptions: (prediction.rewardOptions ?? []).map((option: any) => ({
+                            value: option.optionValue,
+                            rewardPoints: option.rewardPoints,
+                            partialRewardPoints: option.partialRewardPoints,
+                        })),
+                        pronostic: pronostic ? {
+                            id: pronostic.id,
+                            predictionId: pronostic.predictionId,
+                            status: pronostic.status,
+                            scoringModel: pronostic.scoringModel,
+                            rewardPointsSnapshot: pronostic.rewardPointsSnapshot,
+                            partialRewardPointsSnapshot: pronostic.partialRewardPointsSnapshot,
+                            championshipPointsAwarded: pronostic.championshipPointsAwarded,
+                            detail: pronostic.detail
+                                ? { value: pronostic.detail.value }
+                                : undefined,
+                        } : null,
+                    };
+                });
+
+            return {
+                id: session.id,
+                idCourseExternal: session.idCourseExternal,
+                name: session.name,
+                type: session.type,
+                location: session.location,
+                dateStart: session.dateStart,
+                predictions,
+            };
+        });
+        const first = sessions[0];
+
+        return {
+            name: first.name.includes(" - ") ? first.name.split(" - ")[0].trim() : first.name,
+            location: first.location,
+            seasonYear: new Date(first.dateStart).getFullYear(),
+            sessions,
+        };
+    }
+
     async getBySession(sessionId: number) {
         const predictions = await this.repo.findAllBySession(sessionId);
         if (!isChampionshipMode()) return predictions;

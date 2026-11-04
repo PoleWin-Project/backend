@@ -58,49 +58,63 @@ function buildUrl(path: string, params?: QueryParams, rawFilters?: string[]): st
     return base;
 }
 
-// ── Response cache (5 min TTL) ────────────────────────────────────────────────
+// ── Cache des réponses (5 min par défaut, durée ajustable) ───────────────────
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
-const responseCache = new Map<string, { data: unknown; expiresAt: number }>();
+const responseCache = new Map<string, { data: unknown; cachedAt: number; expiresAt: number }>();
+const requestsInFlight = new Map<string, Promise<unknown>>();
 
-function getCached<T>(key: string): T | null {
+function getCached<T>(key: string, maxAgeMs?: number): T | null {
     const entry = responseCache.get(key);
-    if (entry && Date.now() < entry.expiresAt) {
+    const now = Date.now();
+    if (entry && now < entry.expiresAt && (maxAgeMs === undefined || now - entry.cachedAt < maxAgeMs)) {
         return entry.data as T;
     }
-    if (entry) responseCache.delete(key);
+    // Une entrée trop ancienne pour cet appel peut rester valable pour un autre
+    // usage moins sensible. On ne la supprime que lorsqu'elle est vraiment expirée.
+    if (entry && now >= entry.expiresAt) responseCache.delete(key);
     return null;
 }
 
-function setCache(key: string, data: unknown): void {
-    responseCache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+function setCache(key: string, data: unknown, ttlMs = CACHE_TTL_MS): void {
+    const now = Date.now();
+    responseCache.set(key, { data, cachedAt: now, expiresAt: now + ttlMs });
 }
 
 // ── HTTP client ───────────────────────────────────────────────────────────────
 
 interface GetOptions {
     noCache?: boolean;
+    /** Durée maximale acceptée et durée de stockage de cette réponse. */
+    cacheTtlMs?: number;
+    /** Ignore la valeur en cache, mais mémorise la nouvelle réponse. */
+    forceRefresh?: boolean;
 }
 
 async function get<T>(path: string, params?: QueryParams, rawFilters?: string[], options?: GetOptions): Promise<T> {
     const url = buildUrl(path, params, rawFilters);
 
-    if (!options?.noCache) {
-        const cached = getCached<T>(url);
+    if (!options?.noCache && !options?.forceRefresh) {
+        const cached = getCached<T>(url, options?.cacheTtlMs);
         if (cached) {
             logger.debug({ url }, "[OpenF1] Cache hit");
             return cached;
         }
     }
 
-    const token = await getAccessToken();
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-    }
+    // Plusieurs téléphones peuvent demander la même grille au même instant.
+    // Une seule requête OpenF1 est exécutée, les autres partagent sa promesse.
+    const pending = requestsInFlight.get(url);
+    if (pending) return pending as Promise<T>;
 
-    try {
-        const res = await fetch(url, { headers, signal: AbortSignal.timeout(4_000) }); // lower to 4s for faster fail
+    const request = (async () => {
+        const token = await getAccessToken();
+        const headers: Record<string, string> = { Accept: "application/json" };
+        if (token) {
+            headers["Authorization"] = `Bearer ${token}`;
+        }
+
+        const res = await fetch(url, { headers, signal: AbortSignal.timeout(4_000) });
 
         if (!res.ok) {
             if (res.status === 401 || res.status === 403) {
@@ -110,16 +124,22 @@ async function get<T>(path: string, params?: QueryParams, rawFilters?: string[],
             throw new Error(`OpenF1 API error ${res.status}: ${res.statusText} (${url})`);
         }
 
-
         const data = await res.json() as T;
         if (!options?.noCache) {
-            setCache(url, data);
+            setCache(url, data, options?.cacheTtlMs);
             logger.debug({ url }, "[OpenF1] Cached response");
         }
         return data;
+    })();
+    requestsInFlight.set(url, request);
+
+    try {
+        return await request;
     } catch (error) {
         logger.error({ url, error: error instanceof Error ? error.message : String(error) }, "[OpenF1] Request failed");
         throw error;
+    } finally {
+        if (requestsInFlight.get(url) === request) requestsInFlight.delete(url);
     }
 }
 

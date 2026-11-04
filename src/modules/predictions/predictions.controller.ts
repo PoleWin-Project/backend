@@ -4,6 +4,13 @@ import { PredictionsService } from "./predictions.service";
 export class PredictionsController {
     constructor(private readonly service = new PredictionsService()) {}
 
+    currentWeekend = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const weekend = await this.service.getCurrentWeekend(req.user!.id);
+            res.json({ status: "ok", weekend });
+        } catch (e) { next(e); }
+    };
+
     getBySession = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const predictions = await this.service.getBySession(Number(req.params.sessionId));

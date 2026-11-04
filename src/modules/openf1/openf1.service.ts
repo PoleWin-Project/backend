@@ -14,6 +14,12 @@ import {
     OpenF1Weather,
 } from "./openf1.types";
 
+const DRIVER_ROSTER_CACHE_TTL_MS = 30 * 1000;
+
+interface DriverRefreshOptions {
+    forceRefresh?: boolean;
+}
+
 export class OpenF1Service {
     async getMeetings(params?: OpenF1MeetingParams): Promise<OpenF1Meeting[]> {
         return openf1Client.get<OpenF1Meeting[]>("/meetings", params as Record<string, string | number | boolean | undefined>);
@@ -28,7 +34,18 @@ export class OpenF1Service {
         return results[0] ?? null;
     }
 
-    async getDrivers(sessionKey: number | "latest"): Promise<OpenF1Driver[]> {
+    async getDrivers(sessionKey: number | "latest", options?: DriverRefreshOptions): Promise<OpenF1Driver[]> {
+        if (options) {
+            return openf1Client.get<OpenF1Driver[]>(
+                "/drivers",
+                { session_key: sessionKey },
+                undefined,
+                {
+                    cacheTtlMs: DRIVER_ROSTER_CACHE_TTL_MS,
+                    forceRefresh: options.forceRefresh,
+                },
+            );
+        }
         return openf1Client.get<OpenF1Driver[]>("/drivers", { session_key: sessionKey });
     }
 
@@ -36,7 +53,10 @@ export class OpenF1Service {
      * OpenF1 ne publie pas toujours `/drivers` avant le début d'une session.
      * L'endpoint public doit malgré tout fournir la grille pour les pronostics.
      */
-    async getDriversWithFallback(sessionKey: number | "latest"): Promise<OpenF1Driver[]> {
+    async getDriversWithFallback(
+        sessionKey: number | "latest",
+        options: DriverRefreshOptions = {},
+    ): Promise<OpenF1Driver[]> {
         let session: OpenF1Session | null = null;
 
         if (typeof sessionKey === "number") {
@@ -50,6 +70,16 @@ export class OpenF1Service {
         const isFutureSession = session
             ? new Date(session.date_start).getTime() > Date.now()
             : false;
+
+        // OpenF1 peut publier la grille d'une session future dès qu'un réserviste
+        // est confirmé. Elle est donc prioritaire sur la session précédente et
+        // sur le classement de la saison.
+        try {
+            const drivers = await this.getDrivers(sessionKey, options);
+            if (drivers.length > 0) return drivers;
+        } catch {
+            // Une session future non publiée est normale : on utilise les replis.
+        }
 
         if (isFutureSession && session) {
             try {
@@ -66,7 +96,7 @@ export class OpenF1Service {
 
                 for (const previousSession of previousSessions) {
                     try {
-                        const drivers = await this.getDrivers(previousSession.session_key);
+                        const drivers = await this.getDrivers(previousSession.session_key, options);
                         if (drivers.length > 0) return drivers;
                     } catch {
                         // Essaie la session précédente du même week-end.
@@ -74,15 +104,6 @@ export class OpenF1Service {
                 }
             } catch {
                 // Le classement saisonnier reste le dernier recours.
-            }
-        }
-
-        if (!isFutureSession) {
-            try {
-                const drivers = await this.getDrivers(sessionKey);
-                if (drivers.length > 0) return drivers;
-            } catch {
-                // Une erreur de la source session ne doit pas devenir une 500.
             }
         }
 

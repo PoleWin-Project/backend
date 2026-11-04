@@ -27,6 +27,8 @@ jest.mock("../openf1/openf1.service", () => ({
 describe("SessionsService", () => {
     let service: SessionsService;
 
+    const flushBackgroundTasks = () => new Promise<void>(resolve => setImmediate(resolve));
+
     beforeEach(() => {
         service = new SessionsService();
         mockGetSessions.mockReset();
@@ -43,20 +45,24 @@ describe("SessionsService", () => {
             expect(result).toEqual({ items: [fakeSession], total: 1, limit: 20, offset: 0 });
         });
 
-        it("refreshes a populated season before selecting upcoming sessions and caches the refresh", async () => {
+        it("returns stored sessions before refreshing a populated season in the background", async () => {
             const calendar = [{ session_key: 42, country_name: "Bahrain" }];
-            mockGetSessions.mockResolvedValue(calendar);
+            let finishRefresh!: (value: typeof calendar) => void;
+            mockGetSessions.mockImplementation(() => new Promise(resolve => { finishRefresh = resolve; }));
             mockRepo.findAll.mockResolvedValue({ rows: [{ name: "Bahrain - Race" }], count: 30 });
             const query = { upcoming: true, limit: 50, offset: 0 };
 
             const result = await service.list(query);
+            expect(result.items[0].name).toBe("Bahrain - Race");
+
+            // La réponse PostgreSQL est disponible avant la fin de la tâche OpenF1.
+            expect(mockRepo.upsertFromOpenF1).not.toHaveBeenCalled();
+            finishRefresh(calendar);
+            await flushBackgroundTasks();
             await service.list(query);
 
-            expect(result.items[0].name).toBe("Bahrain - Race");
             expect(mockGetSessions).toHaveBeenCalledTimes(1);
             expect(mockRepo.upsertFromOpenF1).toHaveBeenCalledWith(calendar);
-            expect(mockRepo.upsertFromOpenF1.mock.invocationCallOrder[0])
-                .toBeLessThan(mockRepo.findAll.mock.invocationCallOrder[0]!);
         });
 
         it("refreshes again after five minutes so schedule changes are picked up", async () => {
@@ -87,7 +93,9 @@ describe("SessionsService", () => {
             mockRepo.findAll.mockResolvedValue({ rows: [{ id: 1 }], count: 1 });
             const query = { upcoming: true, limit: 50, offset: 0 };
             await expect(service.list(query)).resolves.toMatchObject({ total: 1 });
+            await flushBackgroundTasks();
             await service.list(query);
+            await flushBackgroundTasks();
             expect(mockGetSessions).toHaveBeenCalledTimes(2);
         });
 
