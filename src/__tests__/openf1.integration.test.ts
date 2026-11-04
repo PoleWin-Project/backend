@@ -192,9 +192,31 @@ describe("GET /api/v1/openf1/sessions/:sessionKey/drivers", () => {
 
     it("retourne un tableau vide si pas de pilotes", async () => {
         mockGet.mockResolvedValue([]);
-        const res = await request(app).get("/api/v1/openf1/sessions/9999/drivers");
+        const standingsFetch = jest.spyOn(global, "fetch").mockResolvedValue({
+            ok: true,
+            json: async () => ({ MRData: { StandingsTable: { StandingsLists: [] } } }),
+        } as any);
+        try {
+            const res = await request(app).get("/api/v1/openf1/sessions/9999/drivers");
+            expect(res.status).toBe(200);
+            expect(res.body.drivers).toEqual([]);
+        } finally {
+            standingsFetch.mockRestore();
+        }
+    });
+
+    it("force une lecture fraîche quand fresh=true", async () => {
+        mockGet.mockResolvedValue([fakeDriver]);
+
+        const res = await request(app).get("/api/v1/openf1/sessions/9158/drivers?fresh=true");
+
         expect(res.status).toBe(200);
-        expect(res.body.drivers).toEqual([]);
+        expect(mockGet).toHaveBeenCalledWith(
+            "/drivers",
+            { session_key: 9158 },
+            undefined,
+            { cacheTtlMs: 30_000, forceRefresh: true },
+        );
     });
 });
 

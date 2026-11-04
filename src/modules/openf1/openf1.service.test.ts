@@ -129,19 +129,29 @@ describe("OpenF1Service", () => {
     });
 
     describe("getDriversWithFallback()", () => {
-        it("utilise directement le classement pour une session future", async () => {
+        it("privilégie la grille publiée pour une session future", async () => {
             const futureSession = { ...fakeSession, date_start: "2999-09-01T13:00:00+00:00" };
             jest.spyOn(service, "getSessionByKey").mockResolvedValue(futureSession);
-            jest.spyOn(service, "getSessions").mockResolvedValue([]);
-            const directDrivers = jest.spyOn(service, "getDrivers");
-            jest.spyOn(service, "getDriverStandings").mockResolvedValue([
-                { driver_number: 16, driver: fakeDriver },
-            ]);
+            const directDrivers = jest.spyOn(service, "getDrivers").mockResolvedValue([fakeDriver]);
+            const standings = jest.spyOn(service, "getDriverStandings");
 
             const result = await service.getDriversWithFallback(futureSession.session_key);
 
             expect(result).toEqual([fakeDriver]);
-            expect(directDrivers).not.toHaveBeenCalled();
+            expect(directDrivers).toHaveBeenCalledWith(futureSession.session_key, {});
+            expect(standings).not.toHaveBeenCalled();
+        });
+
+        it("force une lecture fraîche lors d'un rafraîchissement manuel", async () => {
+            jest.spyOn(service, "getSessionByKey").mockResolvedValue(fakeSession);
+            const directDrivers = jest.spyOn(service, "getDrivers").mockResolvedValue([fakeDriver]);
+
+            await service.getDriversWithFallback(fakeSession.session_key, { forceRefresh: true });
+
+            expect(directDrivers).toHaveBeenCalledWith(
+                fakeSession.session_key,
+                { forceRefresh: true },
+            );
         });
 
         it("reprend la grille de la session précédente lors d'un remplacement", async () => {
@@ -157,13 +167,16 @@ describe("OpenF1Service", () => {
             };
             jest.spyOn(service, "getSessionByKey").mockResolvedValue(futureRace);
             jest.spyOn(service, "getSessions").mockResolvedValue([qualifying, futureRace]);
-            jest.spyOn(service, "getDrivers").mockResolvedValue([hirakawa]);
+            jest.spyOn(service, "getDrivers")
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([hirakawa]);
             const standings = jest.spyOn(service, "getDriverStandings");
 
             const result = await service.getDriversWithFallback(futureRace.session_key);
 
             expect(result).toEqual([hirakawa]);
-            expect(service.getDrivers).toHaveBeenCalledWith(qualifying.session_key);
+            expect(service.getDrivers).toHaveBeenNthCalledWith(1, futureRace.session_key, {});
+            expect(service.getDrivers).toHaveBeenNthCalledWith(2, qualifying.session_key, {});
             expect(standings).not.toHaveBeenCalled();
         });
 

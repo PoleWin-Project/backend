@@ -742,6 +742,34 @@ paths:
 
     # ── Predictions ───────────────────────────────────────────────────────────
 
+    /api/v1/predictions/current-weekend:
+        get:
+            tags: [Predictions]
+            summary: Charger le prochain week-end de pronostics
+            description: >
+                Retourne en une réponse les prochaines sessions du même Grand Prix,
+                leurs prédictions, les barèmes déjà calculés et le pronostic éventuel
+                de l'utilisateur connecté. Les données essentielles proviennent de
+                PostgreSQL : cet endpoint ne contacte pas OpenF1 et ne bloque donc pas
+                l'affichage mobile sur une API externe.
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: Week-end courant, ou `null` si aucune session à venir n'est disponible
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/CurrentWeekendResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "500":
+                    description: Erreur inattendue pendant la lecture des données
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
     /api/v1/sessions/{sessionId}/predictions:
         get:
             tags: [Predictions]
@@ -1628,6 +1656,12 @@ paths:
         get:
             tags: [OpenF1]
             summary: Pilotes d'une session
+            description: >
+                Retourne d'abord la grille publiée pour la session demandée. Si elle
+                n'est pas encore disponible, utilise la dernière session terminée du
+                même week-end, puis le classement de la saison. La grille possède un
+                cache court de 30 secondes afin de détecter rapidement un pilote
+                remplaçant sans ralentir l'affichage.
             parameters:
                 - name: sessionKey
                   in: path
@@ -1635,6 +1669,16 @@ paths:
                   schema:
                       type: integer
                       example: 9158
+                - name: fresh
+                  in: query
+                  required: false
+                  description: >
+                      Si `true`, ignore la grille en cache et vérifie immédiatement
+                      OpenF1. Utilisé notamment par le pull-to-refresh mobile.
+                  schema:
+                      type: boolean
+                      default: false
+                      example: true
             responses:
                 "200":
                     description: Liste des pilotes
@@ -2853,6 +2897,156 @@ components:
                     format: date-time
 
         # ── Predictions & Pronostics ───────────────────────────────────────────
+
+        PredictionRewardOption:
+            type: object
+            required: [value, rewardPoints]
+            properties:
+                value:
+                    type: string
+                    description: Acronyme du pilote, réponse binaire ou valeur générique `*`
+                    example: LEC
+                rewardPoints:
+                    type: integer
+                    description: Points de championnat attribués si la réponse est correcte
+                    example: 120
+                partialRewardPoints:
+                    type: integer
+                    nullable: true
+                    description: Points attribués pour un résultat partiellement correct, notamment un podium désordonné
+                    example: 60
+
+        CurrentWeekendPronostic:
+            type: object
+            required: [id, predictionId, status]
+            properties:
+                id:
+                    type: integer
+                    example: 42
+                predictionId:
+                    type: integer
+                    example: 12
+                status:
+                    type: string
+                    enum: [draft, submitted, awaiting_verification, won, lost, void]
+                    example: submitted
+                scoringModel:
+                    type: string
+                    enum: [legacy_stake, fixed_reward]
+                    example: fixed_reward
+                rewardPointsSnapshot:
+                    type: integer
+                    nullable: true
+                    example: 120
+                partialRewardPointsSnapshot:
+                    type: integer
+                    nullable: true
+                    example: null
+                championshipPointsAwarded:
+                    type: integer
+                    example: 0
+                detail:
+                    type: object
+                    nullable: true
+                    properties:
+                        value:
+                            type: string
+                            example: LEC
+
+        CurrentWeekendPrediction:
+            type: object
+            required: [id, sessionId, type, rewardOptions]
+            properties:
+                id:
+                    type: integer
+                    example: 12
+                sessionId:
+                    type: integer
+                    example: 5
+                type:
+                    type: string
+                    enum: [POLE_POSITION, RACE_WINNER, FASTEST_LAP, DNF, SAFETY_CAR, SPRINT_WINNER, PODIUM]
+                    example: RACE_WINNER
+                closesAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    example: "2026-11-08T13:00:00.000Z"
+                winningValue:
+                    type: string
+                    nullable: true
+                    example: null
+                rewardOptions:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/PredictionRewardOption"
+                pronostic:
+                    nullable: true
+                    allOf:
+                        - $ref: "#/components/schemas/CurrentWeekendPronostic"
+
+        CurrentWeekendSession:
+            type: object
+            required: [id, name, type, dateStart, predictions]
+            properties:
+                id:
+                    type: integer
+                    example: 5
+                idCourseExternal:
+                    type: integer
+                    nullable: true
+                    description: Clé de session OpenF1
+                    example: 11404
+                name:
+                    type: string
+                    example: "Brazil - Race"
+                type:
+                    type: string
+                    example: Race
+                location:
+                    type: string
+                    nullable: true
+                    example: Interlagos
+                dateStart:
+                    type: string
+                    format: date-time
+                    example: "2026-11-08T13:00:00.000Z"
+                predictions:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/CurrentWeekendPrediction"
+
+        CurrentWeekend:
+            type: object
+            required: [name, seasonYear, sessions]
+            properties:
+                name:
+                    type: string
+                    example: Brazil
+                location:
+                    type: string
+                    nullable: true
+                    example: Interlagos
+                seasonYear:
+                    type: integer
+                    example: 2026
+                sessions:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/CurrentWeekendSession"
+
+        CurrentWeekendResponse:
+            type: object
+            required: [status, weekend]
+            properties:
+                status:
+                    type: string
+                    enum: [ok]
+                    example: ok
+                weekend:
+                    nullable: true
+                    allOf:
+                        - $ref: "#/components/schemas/CurrentWeekend"
 
         Prediction:
             type: object
