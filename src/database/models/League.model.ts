@@ -20,7 +20,8 @@ export class LeagueModel extends Model<
 	declare name: string;
 	declare ownerUserId: number;
 	declare seasonYear: number;
-	declare inviteCode: string | null;
+	declare inviteCode: string;
+	declare scoringMode: CreationOptional<"season" | "from_join">;
 	declare createdAt: CreationOptional<Date>;
 
 	declare getOwner: BelongsToGetAssociationMixin<UserModel>;
@@ -41,7 +42,8 @@ export class LeagueModel extends Model<
 				name: { type: DataTypes.STRING, allowNull: false },
 				ownerUserId: { type: DataTypes.INTEGER, allowNull: false, field: "owner_user_id" },
 				seasonYear: { type: DataTypes.INTEGER, allowNull: false, field: "season_year" },
-				inviteCode: { type: DataTypes.STRING, allowNull: true, unique: true, field: "invite_code" },
+				inviteCode: { type: DataTypes.STRING, allowNull: false, unique: true, field: "invite_code" },
+				scoringMode: { type: DataTypes.STRING, allowNull: false, defaultValue: "season", field: "scoring_mode" },
 				createdAt: {
 					type: DataTypes.DATE,
 					allowNull: false,
