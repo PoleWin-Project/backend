@@ -40,11 +40,14 @@ class AutoResolveScheduler {
         this.running = true;
 
         try {
-            // Find predictions that:
-            // - belong to a session that has already started (dateStart < now)
-            // - have a valid OpenF1 session key
-            // - still have at least one pronostic pending resolution
+            // Les prédictions provisoires/corrigées restent surveillées même quand tous
+            // leurs pronostics sont déjà won/lost : une décision sportive tardive peut
+            // encore modifier le classement officiel pendant 48 h.
             const pending = await PredictionModel.findAll({
+                where: {
+                    voidedAt: null,
+                    resultStatus: { [Op.in]: ["pending", "provisional", "corrected"] },
+                },
                 include: [
                     {
                         model: RaceSessionModel,
@@ -58,10 +61,8 @@ class AutoResolveScheduler {
                     {
                         model: PronosticModel,
                         as: "pronostics",
-                        where: {
-                            status: { [Op.in]: ["submitted", "awaiting_verification"] },
-                        },
                         required: true,
+                        attributes: [],
                     },
                 ],
             });
@@ -73,15 +74,25 @@ class AutoResolveScheduler {
             for (const pred of pending) {
                 try {
                     const result = await this.service.resolve(pred.id, {});
-                    if (result.resolved > 0) {
+                    if (result.resolved > 0 || result.corrected) {
                         logger.info(
-                            { predictionId: pred.id, winningValue: result.winningValue, resolved: result.resolved },
-                            "AutoResolveScheduler: prediction resolved",
+                            {
+                                predictionId: pred.id,
+                                winningValue: result.winningValue,
+                                resultStatus: result.resultStatus,
+                                resolved: result.resolved,
+                                corrected: result.corrected ?? false,
+                            },
+                            "AutoResolveScheduler: official result applied",
                         );
                     } else if (result.awaiting > 0) {
                         logger.debug(
-                            { predictionId: pred.id, awaiting: result.awaiting },
-                            "AutoResolveScheduler: OpenF1 data not ready yet, will retry",
+                            {
+                                predictionId: pred.id,
+                                awaiting: result.awaiting,
+                                candidateWinningValue: result.candidateWinningValue ?? null,
+                            },
+                            "AutoResolveScheduler: official result not confirmed yet, will retry",
                         );
                     }
                 } catch (err) {

@@ -49,12 +49,12 @@ export type UpdatePronosticInput = z.infer<typeof UpdatePronosticDto>;
 
 export const ResolveDto = z.object({
     winningValue: z.string().min(1).max(500).optional(),
-    // Re-résolution admin : recalcule aussi les pronostics déjà "won"/"lost"
-    // (corrige un résultat erroné en annulant les points déjà crédités).
-    // MODE LEGACY UNIQUEMENT : en mode championship les points ne sont jamais retirés
-    // par une re-résolution (une correction d'arbitrage devra passer par un
-    // événement `admin_correction` tracé — à implémenter).
+    // Re-résolution admin immédiate. En championnat, chaque delta est ajouté au
+    // journal `championship_score_events` avec source `admin_correction`.
     force: z.boolean().optional(),
+}).refine((value) => !value.force || value.winningValue !== undefined, {
+    message: "winningValue is required when force is true",
+    path: ["winningValue"],
 });
 
 export type ResolveInput = z.infer<typeof ResolveDto>;

@@ -125,7 +125,7 @@ export class PredictionsController {
 
     resolve = async (req: Request, res: Response, next: NextFunction) => {
         try {
-            const result = await this.service.resolve(Number(req.params.predictionId), req.body);
+            const result = await this.service.resolve(Number(req.params.predictionId), req.body, req.user!.id);
             res.json({ status: "ok", ...result });
         } catch (e) { next(e); }
     };

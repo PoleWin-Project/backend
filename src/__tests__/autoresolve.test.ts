@@ -7,10 +7,6 @@ const mockGet = openf1Client.get as jest.Mock;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function makeSession(dateEnd: string) {
-    return [{ session_key: 11315, session_name: "Race", date_start: "2026-06-28T13:00:00+00:00", date_end: dateEnd }];
-}
-
 function makeDrivers() {
     return [
         { driver_number: 63, name_acronym: "RUS" },
@@ -47,6 +43,21 @@ function makeRacePositions() {
     ];
 }
 
+function makeOfficialResults() {
+    return makeRacePositions().map((p) => ({
+        position: p.position,
+        driver_number: p.driver_number,
+        number_of_laps: p.position <= 6 ? 71 : 20,
+        dnf: [55, 11, 14, 77, 18].includes(p.driver_number),
+        dns: false,
+        dsq: false,
+        duration: null,
+        gap_to_leader: null,
+        meeting_key: 1,
+        session_key: SESSION_KEY,
+    }));
+}
+
 // 71 tours de course — les DNF ont un dernier tour < 69 (71 - 2)
 function makeRaceLaps() {
     const laps: object[] = [];
@@ -81,58 +92,19 @@ function makeRaceLaps() {
     return laps;
 }
 
-// Tours de qualifs — 3 phases (Q1, Q2, Q3) séparées par > 5 min
-function makeQualiLaps() {
-    const laps: object[] = [];
-    const drivers = [
-        { num: 12, acronym: "ANT" }, { num: 63, acronym: "RUS" },
-        { num: 1, acronym: "VER" }, { num: 4, acronym: "NOR" },
-        { num: 44, acronym: "HAM" }, { num: 16, acronym: "LEC" },
-        { num: 55, acronym: "SAI" }, { num: 11, acronym: "PER" },
-        { num: 14, acronym: "ALO" }, { num: 10, acronym: "GAS" },
-    ];
-
-    // Q1 — 20 pilotes, tours lents (~80s), base à 14:00
-    for (let i = 0; i < 20; i++) {
-        laps.push({
-            driver_number: i + 1, lap_number: 1, lap_duration: 82 + i * 0.1,
-            is_pit_out_lap: false, date_start: `2026-06-27T14:0${Math.floor(i / 5)}:00.000Z`
-        });
-    }
-
-    // Q2 — 15 pilotes, base à 14:25 (gap > 5 min après Q1)
-    for (let i = 0; i < 15; i++) {
-        laps.push({
-            driver_number: i + 1, lap_number: 1, lap_duration: 79 + i * 0.1,
-            is_pit_out_lap: false, date_start: `2026-06-27T14:2${Math.floor(i / 5)}:00.000Z`
-        });
-    }
-
-    // Q3 — 10 pilotes, base à 14:50 (gap > 5 min après Q2) — ANT le plus rapide
-    for (let i = 0; i < drivers.length; i++) {
-        const { num } = drivers[i];
-        // ANT (12) est le plus rapide en Q3
-        const duration = num === 12 ? 74.5 : 75 + i * 0.2;
-        laps.push({
-            driver_number: num, lap_number: 1, lap_duration: duration,
-            is_pit_out_lap: false, date_start: `2026-06-27T14:5${Math.floor(i / 3)}:00.000Z`
-        });
-    }
-
-    return laps;
-}
-
 // ── Setup ──────────────────────────────────────────────────────────────────────
 
 const SESSION_KEY = 11315;
-const PAST_DATE = "2026-06-28T15:00:00+00:00"; // course terminée
-const FUTURE_DATE = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(); // dans 2h
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
-describe("autoResolve — garde isSessionFinished", () => {
-    it("retourne null pour tous les types si la session n'est pas terminée", async () => {
-        mockGet.mockResolvedValue(makeSession(FUTURE_DATE));
+describe("autoResolve — classement officiel obligatoire", () => {
+    it("retourne null tant que session_result est vide, même si date_end est dépassée", async () => {
+        mockGet.mockImplementation((path: string) => {
+            if (path === "/session_result") return Promise.resolve([]);
+            if (path === "/position") return Promise.resolve(makeRacePositions());
+            return Promise.resolve([]);
+        });
 
         const types = ["RACE_WINNER", "SPRINT_WINNER", "POLE_POSITION",
             "FASTEST_LAP", "DNF", "SAFETY_CAR", "PODIUM"] as const;
@@ -142,17 +114,15 @@ describe("autoResolve — garde isSessionFinished", () => {
             expect(result).toBeNull();
         }
 
-        // Aucun autre appel OpenF1 ne doit avoir été fait
-        expect(mockGet).toHaveBeenCalledWith("/sessions", { session_key: SESSION_KEY });
+        // Le classement live ne doit jamais servir à attribuer les points.
+        expect(mockGet).toHaveBeenCalledWith(
+            "/session_result",
+            { session_key: SESSION_KEY },
+            undefined,
+            { forceRefresh: true, cacheTtlMs: 60_000 },
+        );
         expect(mockGet).not.toHaveBeenCalledWith("/position", expect.anything());
         expect(mockGet).not.toHaveBeenCalledWith("/laps", expect.anything());
-    });
-
-    it("retourne null si date_end est absente (session sans fin définie)", async () => {
-        mockGet.mockResolvedValue([{ session_key: SESSION_KEY, date_end: null }]);
-
-        const result = await autoResolve("RACE_WINNER", SESSION_KEY);
-        expect(result).toBeNull();
     });
 });
 
@@ -161,8 +131,7 @@ describe("autoResolve — garde isSessionFinished", () => {
 describe("autoResolve — RACE_WINNER (GP Autriche 2026)", () => {
     beforeEach(() => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
-            if (path === "/position") return Promise.resolve(makeRacePositions());
+            if (path === "/session_result") return Promise.resolve(makeOfficialResults());
             if (path === "/drivers") return Promise.resolve(makeDrivers());
             return Promise.resolve([]);
         });
@@ -175,8 +144,7 @@ describe("autoResolve — RACE_WINNER (GP Autriche 2026)", () => {
 
     it("retourne null si aucun pilote en P1 dans les données OpenF1", async () => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
-            if (path === "/position") return Promise.resolve([]); // pas de données
+            if (path === "/session_result") return Promise.resolve([]);
             return Promise.resolve([]);
         });
 
@@ -190,10 +158,9 @@ describe("autoResolve — RACE_WINNER (GP Autriche 2026)", () => {
 describe("autoResolve — SPRINT_WINNER", () => {
     it("retourne le pilote en P1 (même logique que RACE_WINNER)", async () => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
-            if (path === "/position") return Promise.resolve([
-                { driver_number: 4, position: 1, date: "2026-07-04T12:00:00Z" }, // NOR gagne le sprint
-                { driver_number: 1, position: 2, date: "2026-07-04T12:00:00Z" },
+            if (path === "/session_result") return Promise.resolve([
+                { driver_number: 4, position: 1 },
+                { driver_number: 1, position: 2 },
             ]);
             if (path === "/drivers") return Promise.resolve(makeDrivers());
             return Promise.resolve([]);
@@ -209,7 +176,7 @@ describe("autoResolve — SPRINT_WINNER", () => {
 describe("autoResolve — FASTEST_LAP (GP Autriche 2026)", () => {
     beforeEach(() => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
+            if (path === "/session_result") return Promise.resolve(makeOfficialResults());
             if (path === "/laps") return Promise.resolve(makeRaceLaps());
             if (path === "/drivers") return Promise.resolve(makeDrivers());
             return Promise.resolve([]);
@@ -230,7 +197,7 @@ describe("autoResolve — FASTEST_LAP (GP Autriche 2026)", () => {
             { driver_number: 63, lap_number: 31, lap_duration: 73.0, is_pit_out_lap: false, date_start: "2026-06-28T13:46:00Z" },
         ];
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
+            if (path === "/session_result") return Promise.resolve(makeOfficialResults());
             if (path === "/laps") return Promise.resolve(lapsWithPitOut);
             if (path === "/drivers") return Promise.resolve(makeDrivers());
             return Promise.resolve([]);
@@ -242,7 +209,7 @@ describe("autoResolve — FASTEST_LAP (GP Autriche 2026)", () => {
 
     it("retourne null si aucun tour valide", async () => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
+            if (path === "/session_result") return Promise.resolve(makeOfficialResults());
             if (path === "/laps") return Promise.resolve([
                 { driver_number: 63, lap_number: 1, lap_duration: null, is_pit_out_lap: false, date_start: "2026-06-28T13:01:00Z" },
             ]);
@@ -259,8 +226,7 @@ describe("autoResolve — FASTEST_LAP (GP Autriche 2026)", () => {
 describe("autoResolve — DNF (GP Autriche 2026)", () => {
     beforeEach(() => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
-            if (path === "/laps") return Promise.resolve(makeRaceLaps());
+            if (path === "/session_result") return Promise.resolve(makeOfficialResults());
             if (path === "/drivers") return Promise.resolve(makeDrivers());
             return Promise.resolve([]);
         });
@@ -282,12 +248,10 @@ describe("autoResolve — DNF (GP Autriche 2026)", () => {
     });
 
     it("retourne NONE quand tous les pilotes terminent", async () => {
-        const allFinishLaps = makeDrivers().map(({ driver_number }) =>
-            ({ driver_number, lap_number: 71, lap_duration: 72.0, is_pit_out_lap: false, date_start: "2026-06-28T14:06:00Z" })
-        );
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
-            if (path === "/laps") return Promise.resolve(allFinishLaps);
+            if (path === "/session_result") return Promise.resolve(
+                makeOfficialResults().map((r) => ({ ...r, dnf: false })),
+            );
             return Promise.resolve([]);
         });
 
@@ -295,13 +259,9 @@ describe("autoResolve — DNF (GP Autriche 2026)", () => {
         expect(result).toBe("NONE");
     });
 
-    it("retourne null si la course a à peine commencé (< 3 tours)", async () => {
-        const earlyLaps = [
-            { driver_number: 63, lap_number: 2, lap_duration: 72.0, is_pit_out_lap: false, date_start: "2026-06-28T13:02:00Z" },
-        ];
+    it("retourne null tant que le classement officiel n'est pas publié", async () => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
-            if (path === "/laps") return Promise.resolve(earlyLaps);
+            if (path === "/session_result") return Promise.resolve([]);
             return Promise.resolve([]);
         });
 
@@ -315,7 +275,7 @@ describe("autoResolve — DNF (GP Autriche 2026)", () => {
 describe("autoResolve — SAFETY_CAR", () => {
     it("retourne NO quand aucun événement Safety Car (GP Autriche 2026)", async () => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
+            if (path === "/session_result") return Promise.resolve(makeOfficialResults());
             if (path === "/race_control") return Promise.resolve([
                 { message: "TRACK CLEAR", flag: null },
                 { message: "DRS ENABLED", flag: null },
@@ -330,7 +290,7 @@ describe("autoResolve — SAFETY_CAR", () => {
 
     it("retourne YES quand un message SAFETY CAR est présent", async () => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
+            if (path === "/session_result") return Promise.resolve(makeOfficialResults());
             if (path === "/race_control") return Promise.resolve([
                 { message: "TRACK CLEAR", flag: null },
                 { message: "SAFETY CAR DEPLOYED", flag: "SC" },
@@ -345,7 +305,7 @@ describe("autoResolve — SAFETY_CAR", () => {
 
     it("retourne YES quand le flag SC est présent même sans le mot dans le message", async () => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
+            if (path === "/session_result") return Promise.resolve(makeOfficialResults());
             if (path === "/race_control") return Promise.resolve([
                 { message: "NEUTRALISATION", flag: "SC" },
             ]);
@@ -358,7 +318,7 @@ describe("autoResolve — SAFETY_CAR", () => {
 
     it("retourne NO quand un VIRTUAL SAFETY CAR est présent au lieu d'un vrai", async () => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
+            if (path === "/session_result") return Promise.resolve(makeOfficialResults());
             if (path === "/race_control") return Promise.resolve([
                 { message: "VIRTUAL SAFETY CAR DEPLOYED", flag: "VSC" },
             ]);
@@ -375,8 +335,7 @@ describe("autoResolve — SAFETY_CAR", () => {
 describe("autoResolve — PODIUM (GP Autriche 2026)", () => {
     beforeEach(() => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
-            if (path === "/position") return Promise.resolve(makeRacePositions());
+            if (path === "/session_result") return Promise.resolve(makeOfficialResults());
             if (path === "/drivers") return Promise.resolve(makeDrivers());
             return Promise.resolve([]);
         });
@@ -389,9 +348,8 @@ describe("autoResolve — PODIUM (GP Autriche 2026)", () => {
 
     it("retourne null si P2 ou P3 manquent dans les données OpenF1", async () => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
-            if (path === "/position") return Promise.resolve([
-                { driver_number: 63, position: 1, date: "2026-06-28T14:06:00Z" }, // seulement P1
+            if (path === "/session_result") return Promise.resolve([
+                { driver_number: 63, position: 1 },
             ]);
             if (path === "/drivers") return Promise.resolve(makeDrivers());
             return Promise.resolve([]);
@@ -407,22 +365,23 @@ describe("autoResolve — PODIUM (GP Autriche 2026)", () => {
 describe("autoResolve — POLE_POSITION (Qualifs Autriche 2026)", () => {
     beforeEach(() => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
-            if (path === "/laps") return Promise.resolve(makeQualiLaps());
+            if (path === "/session_result") return Promise.resolve([
+                { driver_number: 12, position: 1 },
+                { driver_number: 63, position: 2 },
+            ]);
             if (path === "/drivers") return Promise.resolve(makeDrivers());
             return Promise.resolve([]);
         });
     });
 
-    it("retourne ANT (meilleur tour en Q3)", async () => {
+    it("retourne ANT depuis le classement officiel", async () => {
         const result = await autoResolve("POLE_POSITION", SESSION_KEY);
         expect(result).toBe("ANT");
     });
 
-    it("retourne null si aucun tour de qualifs valide", async () => {
+    it("retourne null si le classement officiel de la qualif est indisponible", async () => {
         mockGet.mockImplementation((path: string) => {
-            if (path === "/sessions") return Promise.resolve(makeSession(PAST_DATE));
-            if (path === "/laps") return Promise.resolve([]);
+            if (path === "/session_result") return Promise.resolve([]);
             return Promise.resolve([]);
         });
 

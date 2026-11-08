@@ -44,6 +44,10 @@ const EnvSchema = z.object({
     PREDICTIONS_FROZEN:     z.enum(["true", "false"]).default("false"),
     // Permet de couper le scheduler de résolution automatique pendant la bascule.
     AUTORESOLVE_ENABLED:    z.enum(["true", "false"]).default("true"),
+    // Un résultat OpenF1 doit rester identique entre deux observations avant attribution.
+    RESULT_CONFIRMATION_MINUTES: z.coerce.number().int().min(0).max(60).default(5),
+    // Pendant cette fenêtre, un changement officiel réattribue automatiquement les points.
+    RESULT_RECONCILIATION_HOURS: z.coerce.number().int().min(1).max(168).default(48),
     // Comportement face à un ancien client qui envoie encore `pointsStaked` en mode
     // championship : "accept" = la mise est ignorée, "reject" = 426 Upgrade Required.
     LEGACY_CLIENT_POLICY:   z.enum(["accept", "reject"]).default("accept"),
@@ -80,6 +84,8 @@ export const env = {
     scoringModel:          d.SCORING_MODEL,
     predictionsFrozen:     d.PREDICTIONS_FROZEN === "true",
     autoresolveEnabled:    d.AUTORESOLVE_ENABLED === "true",
+    resultConfirmationMinutes: d.RESULT_CONFIRMATION_MINUTES,
+    resultReconciliationHours: d.RESULT_RECONCILIATION_HOURS,
     legacyClientPolicy:    d.LEGACY_CLIENT_POLICY,
 };
 

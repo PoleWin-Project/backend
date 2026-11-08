@@ -1,5 +1,5 @@
 import { openf1Client } from "../../common/clients/openf1.client";
-import { OpenF1Driver, OpenF1Position, OpenF1Lap, OpenF1RaceControl, OpenF1Session } from "../openf1/openf1.types";
+import { OpenF1Driver, OpenF1Lap, OpenF1RaceControl, OpenF1SessionResult } from "../openf1/openf1.types";
 import { PREDICTION_TYPES } from "./predictions.dto";
 
 type PredictionType = (typeof PREDICTION_TYPES)[number];
@@ -9,104 +9,30 @@ async function getDriverAcronymMap(sessionKey: number): Promise<Map<number, stri
     return new Map(drivers.map((d) => [d.driver_number, d.name_acronym]));
 }
 
-async function getFinalPositions(sessionKey: number): Promise<{ driverNumber: number; position: number }[]> {
-    const positions = await openf1Client.get<OpenF1Position[]>("/position", { session_key: sessionKey });
-
-    const latest = new Map<number, OpenF1Position>();
-    for (const p of positions) {
-        const existing = latest.get(p.driver_number);
-        if (!existing || p.date > existing.date) {
-            latest.set(p.driver_number, p);
-        }
-    }
-
-    return Array.from(latest.values()).map((p) => ({
-        driverNumber: p.driver_number,
-        position: p.position,
-    }));
-}
-
-// Délai de stabilisation après la fin officielle : OpenF1 continue d'ingérer les
-// derniers tours / le classement final quelques minutes après `date_end`. Résoudre
-// trop tôt fige un résultat PROVISOIRE (ex. pole attribuée au leader intermédiaire
-// avant que le tour de pole ne soit propagé). On attend que les données se figent.
-const RESULT_SETTLE_MS = 10 * 60 * 1000; // 10 min
-
-async function isSessionFinished(sessionKey: number): Promise<boolean> {
-    const sessions = await openf1Client.get<OpenF1Session[]>("/sessions", { session_key: sessionKey });
-    const session = sessions[0];
-    if (!session?.date_end) return false;
-    return new Date(session.date_end).getTime() + RESULT_SETTLE_MS < Date.now();
-}
-
 /**
- * All 3 supported types resolve the same way: P1 at end of session → driver acronym.
- * Returns null if data is unavailable or the session has not finished yet.
+ * Source de vérité : `/session_result`, publié seulement après le classement officiel.
+ * `date_end` et `/position` sont volontairement ignorés : pendant une interruption
+ * pluie/drapeau rouge, l'heure planifiée peut être dépassée alors que `/position`
+ * contient encore un classement live provisoire.
  */
 export async function autoResolve(type: PredictionType, sessionKey: number): Promise<string | null> {
     try {
-        const finished = await isSessionFinished(sessionKey);
-        if (!finished) return null;
+        const officialResults = await openf1Client.get<OpenF1SessionResult[]>(
+            "/session_result",
+            { session_key: sessionKey },
+            undefined,
+            { forceRefresh: true, cacheTtlMs: 60_000 },
+        );
+        if (!officialResults.length) return null;
 
         switch (type) {
             case "RACE_WINNER":
-            case "SPRINT_WINNER": {
-                const positions = await getFinalPositions(sessionKey);
-                const p1 = positions.find((p) => p.position === 1);
+            case "SPRINT_WINNER":
+            case "POLE_POSITION": {
+                const p1 = officialResults.find((p) => p.position === 1);
                 if (!p1) return null;
                 const map = await getDriverAcronymMap(sessionKey);
-                return map.get(p1.driverNumber) ?? null;
-            }
-            case "POLE_POSITION": {
-                // Source officielle d'abord : le classement final de la qualif (P1 = pole).
-                // Il tient compte des tours SUPPRIMÉS (dépassement de limites de piste),
-                // contrairement au « meilleur temps brut » des /laps qui peut désigner
-                // un pilote dont le meilleur tour a été annulé.
-                const finalPositions = await getFinalPositions(sessionKey);
-                const pole = finalPositions.find((p) => p.position === 1);
-                if (pole) {
-                    const officialMap = await getDriverAcronymMap(sessionKey);
-                    const officialAcr = officialMap.get(pole.driverNumber);
-                    if (officialAcr) return officialAcr;
-                }
-
-                // Fallback : heuristique « meilleur tour de Q3 » si le classement
-                // /position est indisponible.
-                const laps = await openf1Client.get<OpenF1Lap[]>("/laps", { session_key: sessionKey });
-                const validLaps = laps.filter((l) => l.lap_duration !== null && !l.is_pit_out_lap);
-                if (!validLaps.length) return null;
-
-                validLaps.sort((a, b) => new Date(a.date_start!).getTime() - new Date(b.date_start!).getTime());
-
-                const phases: OpenF1Lap[][] = [];
-                let currentPhase: OpenF1Lap[] = [];
-                for (let i = 0; i < validLaps.length; i++) {
-                    if (i === 0) {
-                        currentPhase.push(validLaps[i]);
-                    } else {
-                        const gap = new Date(validLaps[i].date_start!).getTime() - new Date(validLaps[i - 1].date_start!).getTime();
-                        if (gap > 5 * 60 * 1000) { // 5 minutes gap
-                            phases.push(currentPhase);
-                            currentPhase = [validLaps[i]];
-                        } else {
-                            currentPhase.push(validLaps[i]);
-                        }
-                    }
-                }
-                phases.push(currentPhase);
-
-                const q3Laps: OpenF1Lap[] = [];
-                for (let i = phases.length - 1; i >= 0; i--) {
-                    const uniqueDrivers = new Set(phases[i].map(l => l.driver_number)).size;
-                    if (uniqueDrivers > 10) break; // Q3 has max 10 drivers
-                    q3Laps.push(...phases[i]);
-                }
-
-                const targetLaps = q3Laps.length > 0 ? q3Laps : validLaps;
-                const fastest = targetLaps.reduce((min, l) => l.lap_duration! < min.lap_duration! ? l : min);
-
-                const map = await getDriverAcronymMap(sessionKey);
-                return map.get(fastest.driver_number) ?? null;
+                return map.get(p1.driver_number) ?? null;
             }
             case "FASTEST_LAP": {
                 const laps = await openf1Client.get<OpenF1Lap[]>("/laps", { session_key: sessionKey });
@@ -119,26 +45,8 @@ export async function autoResolve(type: PredictionType, sessionKey: number): Pro
                 return map.get(fastest.driver_number) ?? null;
             }
 
-
-
             case "DNF": {
-                const laps = await openf1Client.get<OpenF1Lap[]>("/laps", { session_key: sessionKey });
-                if (!laps.length) return null;
-
-                const maxLap = Math.max(...laps.map((l) => l.lap_number));
-                if (maxLap < 3) return null; // race barely started, too early
-
-                // Last completed lap per driver
-                const driverMaxLap = new Map<number, number>();
-                for (const lap of laps) {
-                    const cur = driverMaxLap.get(lap.driver_number) ?? 0;
-                    if (lap.lap_number > cur) driverMaxLap.set(lap.driver_number, lap.lap_number);
-                }
-
-                // Driver is considered DNF if they stopped > 2 laps before the end
-                const dnfNumbers = Array.from(driverMaxLap.entries())
-                    .filter(([, last]) => last < maxLap - 2)
-                    .map(([num]) => num);
+                const dnfNumbers = officialResults.filter((r) => r.dnf).map((r) => r.driver_number);
 
                 if (!dnfNumbers.length) return "NONE";
 
@@ -161,15 +69,14 @@ export async function autoResolve(type: PredictionType, sessionKey: number): Pro
             }
 
             case "PODIUM": {
-                const positions = await getFinalPositions(sessionKey);
-                const p1 = positions.find((p) => p.position === 1);
-                const p2 = positions.find((p) => p.position === 2);
-                const p3 = positions.find((p) => p.position === 3);
+                const p1 = officialResults.find((p) => p.position === 1);
+                const p2 = officialResults.find((p) => p.position === 2);
+                const p3 = officialResults.find((p) => p.position === 3);
                 if (!p1 || !p2 || !p3) return null;
                 const map = await getDriverAcronymMap(sessionKey);
-                const acr1 = map.get(p1.driverNumber) ?? "";
-                const acr2 = map.get(p2.driverNumber) ?? "";
-                const acr3 = map.get(p3.driverNumber) ?? "";
+                const acr1 = map.get(p1.driver_number) ?? "";
+                const acr2 = map.get(p2.driver_number) ?? "";
+                const acr3 = map.get(p3.driver_number) ?? "";
                 if (!acr1 || !acr2 || !acr3) return null;
                 return `${acr1},${acr2},${acr3}`;
             }
