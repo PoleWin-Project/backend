@@ -17,6 +17,9 @@ const ctrl = new PredictionsController();
 
 // ── User (auth) ───────────────────────────────────────────────────────────────
 
+// Route agrégée déclarée avant /:predictionId pour éviter que "current-weekend"
+// soit interprété comme un identifiant de prédiction.
+router.get("/predictions/current-weekend",                         requireAuth, ctrl.currentWeekend);
 router.get("/predictions/users/me/pronostics",               requireAuth, validateQuery(ListMyPronosticsDto), ctrl.myPronostics);
 router.get("/predictions/sessions/:sessionId/pronostics/me", requireAuth, ctrl.myPronosticsForSession);
 

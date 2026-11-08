@@ -70,6 +70,20 @@ export interface OpenF1Position {
     session_key:    number;
 }
 
+/** Classement officiel publié après la session (et révisé après décisions sportives). */
+export interface OpenF1SessionResult {
+    position:       number;
+    driver_number:  number;
+    number_of_laps: number;
+    dnf:            boolean;
+    dns:            boolean;
+    dsq:            boolean;
+    duration:       number | number[] | null;
+    gap_to_leader:  number | number[] | string | null;
+    meeting_key:    number;
+    session_key:    number;
+}
+
 export interface OpenF1Lap {
     date_start:         string;
     driver_number:      number;
