@@ -19,6 +19,7 @@ export class LeagueMemberModel extends Model<
 	declare leagueId: number;
 	declare userId: number;
 	declare joinedAt: CreationOptional<Date>;
+	declare pointsBaseline: CreationOptional<number>;
 
 	declare getLeague: BelongsToGetAssociationMixin<LeagueModel>;
 	declare getUser: BelongsToGetAssociationMixin<UserModel>;
@@ -37,6 +38,7 @@ export class LeagueMemberModel extends Model<
 				id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
 				leagueId: { type: DataTypes.INTEGER, allowNull: false, field: "league_id" },
 				userId: { type: DataTypes.INTEGER, allowNull: false, field: "user_id" },
+				pointsBaseline: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: "points_baseline" },
 				joinedAt: {
 					type: DataTypes.DATE,
 					allowNull: false,
