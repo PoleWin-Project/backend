@@ -28,6 +28,7 @@ import garageRoutes from "./modules/garage/garage.routes";
 import configRoutes from "./modules/config/config.routes";
 import paddockRoutes from "./modules/paddock/paddock.routes";
 import challengesRoutes from "./modules/challenges/challenges.routes";
+import leaguesRoutes from "./modules/leagues/leagues.routes";
 import { errorHandler } from "./common/middleware/errorHandler";
 import { notFound } from "./common/middleware/notFound";
 import { jwtAuth } from "./common/middleware/jwtAuth";
@@ -98,6 +99,7 @@ export function createApp() {
 	app.use(API_V1, configRoutes);
 	app.use(API_V1, challengesRoutes);
 	app.use(API_V1, paddockRoutes);
+	app.use(API_V1, leaguesRoutes);
 
 	app.use(notFound);
 	app.use(errorHandler);

@@ -1,4 +1,4 @@
-import { Op, Transaction, UniqueConstraintError } from "sequelize";
+import { Op, QueryTypes, Transaction, UniqueConstraintError } from "sequelize";
 import { sequelize } from "../../database/sequelize";
 import { httpErrors } from "../../common/errors/http";
 import { env, isChampionshipMode } from "../../config/env";
@@ -18,6 +18,7 @@ import {
     UpdatePronosticInput,
 } from "./predictions.dto";
 import { autoResolve, isWinnerForType } from "./predictions.autoresolve";
+import { isResultCandidateConfirmed } from "./predictionResultState";
 import { notifyUser } from "../push/push.service";
 import { emitToUser } from "../../socket/ws.handler";
 import { seasonsService } from "../seasons/seasons.service";
@@ -48,6 +49,19 @@ type Outcome = {
     pointsEarned?: number;
     pointsStaked?: number;
     scoringModel: "legacy_stake" | "fixed_reward";
+    corrected?: boolean;
+    pointsDelta?: number;
+};
+
+type ResultSource = "openf1_session_result" | "admin";
+
+export type ResolutionResult = {
+    resolved: number;
+    awaiting: number;
+    winningValue: string | null;
+    resultStatus: "pending" | "provisional" | "corrected" | "final";
+    candidateWinningValue?: string | null;
+    corrected?: boolean;
 };
 
 /**
@@ -64,6 +78,64 @@ export class PredictionsService {
     constructor(private readonly repo = new PredictionsRepository()) {}
 
     // ── Lecture ──────────────────────────────────────────────────────────────
+
+    async getCurrentWeekend(userId: number) {
+        const rows = await this.repo.findCurrentWeekend(userId);
+        if (!rows.length) return null;
+
+        const sessions = rows.map((row: any) => {
+            const session = typeof row.toJSON === "function" ? row.toJSON() : row;
+            const predictions = (session.predictions ?? [])
+                .filter((prediction: any) => !isChampionshipMode() || !prediction.voidedAt)
+                .sort((a: any, b: any) => Number(a.id) - Number(b.id))
+                .map((prediction: any) => {
+                    const pronostic = prediction.pronostics?.[0] ?? null;
+                    return {
+                        id: prediction.id,
+                        sessionId: prediction.sessionId,
+                        type: prediction.type,
+                        closesAt: prediction.closesAt,
+                        winningValue: prediction.winningValue,
+                        resultStatus: prediction.resultStatus,
+                        rewardOptions: (prediction.rewardOptions ?? []).map((option: any) => ({
+                            value: option.optionValue,
+                            rewardPoints: option.rewardPoints,
+                            partialRewardPoints: option.partialRewardPoints,
+                        })),
+                        pronostic: pronostic ? {
+                            id: pronostic.id,
+                            predictionId: pronostic.predictionId,
+                            status: pronostic.status,
+                            scoringModel: pronostic.scoringModel,
+                            rewardPointsSnapshot: pronostic.rewardPointsSnapshot,
+                            partialRewardPointsSnapshot: pronostic.partialRewardPointsSnapshot,
+                            championshipPointsAwarded: pronostic.championshipPointsAwarded,
+                            detail: pronostic.detail
+                                ? { value: pronostic.detail.value }
+                                : undefined,
+                        } : null,
+                    };
+                });
+
+            return {
+                id: session.id,
+                idCourseExternal: session.idCourseExternal,
+                name: session.name,
+                type: session.type,
+                location: session.location,
+                dateStart: session.dateStart,
+                predictions,
+            };
+        });
+        const first = sessions[0];
+
+        return {
+            name: first.name.includes(" - ") ? first.name.split(" - ")[0].trim() : first.name,
+            location: first.location,
+            seasonYear: new Date(first.dateStart).getFullYear(),
+            sessions,
+        };
+    }
 
     async getBySession(sessionId: number) {
         const predictions = await this.repo.findAllBySession(sessionId);
@@ -149,7 +221,7 @@ export class PredictionsService {
                 }
                 await p.update({ status: "void", resolvedAt: new Date() }, { transaction: tx });
             }
-            await pred.update({ voidedAt: new Date() }, { transaction: tx });
+            await pred.update({ voidedAt: new Date(), resultStatus: "final" }, { transaction: tx });
             logger.info({ predictionId, voided: open.length, refunded }, "Prediction voided");
             return { voided: open.length, refundedLegacyPoints: refunded };
         });
@@ -420,88 +492,429 @@ export class PredictionsService {
     }
 
     /**
-     * Résout une prédiction. IDEMPOTENT : peut être appelée plusieurs fois, en parallèle
-     * (scheduler + admin + plusieurs instances), sans jamais attribuer deux fois des points :
-     *  1. verrou consultatif par prédiction ;
-     *  2. pronostics rechargés et verrouillés DANS la transaction ;
-     *  3. changement de statut conditionnel (seuls les pronostics encore ouverts sont traités) ;
-     *  4. contrainte UNIQUE sur l'événement de score (modèle championship).
+     * Résolution en deux temps :
+     * - automatique : `/session_result` doit fournir deux fois la même valeur ;
+     * - manuelle : attribution immédiate, et `force=true` permet une correction tracée.
+     * Une valeur attribuée reste provisoire pendant la fenêtre de réconciliation.
      */
-    async resolve(predictionId: number, input: ResolveInput) {
+    async resolve(predictionId: number, input: ResolveInput, actorUserId?: number): Promise<ResolutionResult> {
         const pred = await this.repo.findById(predictionId);
         if (!pred) throw httpErrors.notFound("Prediction not found");
         if (pred.voidedAt) throw httpErrors.unprocessableEntity("This prediction has been cancelled", "PREDICTION_VOIDED");
+        if (input.force && !input.winningValue) {
+            throw httpErrors.unprocessableEntity("winningValue is required with force", "VALIDATION_ERROR");
+        }
 
-        const championship = isChampionshipMode();
-        if (championship && input.force) {
+        if (input.winningValue) {
+            return this.applyManualResult(predictionId, pred.type, input.winningValue, Boolean(input.force), actorUserId);
+        }
+
+        const sessionKey = pred.session?.idCourseExternal ?? null;
+        if (!sessionKey) {
             throw httpErrors.unprocessableEntity(
-                "force re-resolution is not available in championship mode (use a traced admin correction)",
-                "FORCE_NOT_SUPPORTED",
+                "No winningValue provided and session has no OpenF1 key (idCourseExternal)",
             );
         }
 
-        const statuses = input.force
-            ? [...RESOLVABLE_STATUSES, "won", "lost"]
-            : [...RESOLVABLE_STATUSES];
-
-        // 1. Résultat : saisie manuelle → OpenF1 → sinon en attente.
-        //    L'appel réseau est fait AVANT d'ouvrir la transaction (pas de verrou tenu pendant I/O).
-        let winningValue: string | null = input.winningValue ?? null;
-        if (!winningValue) {
-            const sessionKey = pred.session?.idCourseExternal ?? null;
-            if (!sessionKey) {
-                throw httpErrors.unprocessableEntity(
-                    "No winningValue provided and session has no OpenF1 key (idCourseExternal)",
-                );
-            }
-            winningValue = await autoResolve(pred.type, sessionKey);
-        }
-
-        // 2. Résultat indisponible → pronostics « en attente de vérification ».
-        if (!winningValue) {
+        // Aucun verrou n'est tenu pendant l'appel réseau.
+        const officialValue = await autoResolve(pred.type, sessionKey);
+        if (!officialValue) {
             const [awaiting] = await PronosticModel.update(
                 { status: "awaiting_verification" },
                 { where: { predictionId, status: "submitted" } },
             );
-            return { resolved: 0, awaiting, winningValue: null };
+            await PredictionModel.update(
+                { resultCheckedAt: new Date(), resultSource: "openf1_session_result" },
+                { where: { id: predictionId } },
+            );
+            return {
+                resolved: 0,
+                awaiting,
+                winningValue: pred.winningValue ?? null,
+                resultStatus: pred.resultStatus ?? "pending",
+            };
         }
 
-        const resolvedValue = winningValue;
-        const outcomes: Outcome[] = [];
+        return this.observeOfficialResult(predictionId, pred.type, officialValue);
+    }
 
-        // 3. Attribution, entièrement transactionnelle.
-        await sequelize.transaction(async (tx) => {
+    private confirmationMs() {
+        return env.resultConfirmationMinutes * 60 * 1000;
+    }
+
+    private reconciliationUntil(now: Date) {
+        return new Date(now.getTime() + env.resultReconciliationHours * 60 * 60 * 1000);
+    }
+
+    private async applyManualResult(
+        predictionId: number,
+        type: string,
+        winningValue: string,
+        force: boolean,
+        actorUserId?: number,
+    ) {
+        const result = await sequelize.transaction(async (tx) => {
             await this.lockPrediction(predictionId, tx);
             const lockedPred = await PredictionModel.findByPk(predictionId, { transaction: tx, lock: tx.LOCK.UPDATE });
             if (!lockedPred) throw httpErrors.notFound("Prediction not found");
-            await lockedPred.update({ winningValue: resolvedValue, resolvedAt: new Date() }, { transaction: tx });
-
-            const pronostics = await this.repo.findPronosticsForResolution(predictionId, statuses, tx);
-            for (const pronostic of pronostics) {
-                const outcome = pronostic.scoringModel === "fixed_reward"
-                    ? await this.resolveFixedReward(pred.type, pronostic, resolvedValue, tx)
-                    : championship
-                        ? this.skipLegacyInChampionship(pronostic)
-                        : await this.resolveLegacy(pred.type, pronostic, resolvedValue, tx);
-                if (outcome) outcomes.push(outcome);
+            if (lockedPred.winningValue && lockedPred.winningValue !== winningValue && !force) {
+                throw httpErrors.conflict(
+                    "Prediction already has a different result; use force to create a traced correction",
+                    "RESULT_ALREADY_SET",
+                );
             }
+            return this.applyConfirmedResultLocked(lockedPred, type, winningValue, "admin", tx, actorUserId);
+        });
+        this.afterResultCommit(predictionId, result.outcomes, result.winningValue, result.resultStatus);
+        return result.response;
+    }
+
+    private async observeOfficialResult(predictionId: number, type: string, officialValue: string) {
+        const result = await sequelize.transaction(async (tx) => {
+            await this.lockPrediction(predictionId, tx);
+            const pred = await PredictionModel.findByPk(predictionId, { transaction: tx, lock: tx.LOCK.UPDATE });
+            if (!pred) throw httpErrors.notFound("Prediction not found");
+            if (pred.voidedAt) throw httpErrors.unprocessableEntity("This prediction has been cancelled", "PREDICTION_VOIDED");
+
+            const now = new Date();
+            const status = pred.resultStatus ?? (pred.winningValue ? "final" : "pending");
+            if (status === "final") {
+                return this.noResultChange(pred, 0);
+            }
+
+            // Première attribution : deux observations identiques sont obligatoires.
+            if (!pred.winningValue) {
+                if (pred.candidateWinningValue !== officialValue || !pred.candidateSeenAt) {
+                    await pred.update({
+                        candidateWinningValue: officialValue,
+                        candidateSeenAt: now,
+                        resultCheckedAt: now,
+                        resultSource: "openf1_session_result",
+                    }, { transaction: tx });
+                    const awaiting = await this.markAwaiting(predictionId, tx);
+                    return this.noResultChange(pred, awaiting, officialValue);
+                }
+                if (!isResultCandidateConfirmed(
+                    pred.candidateWinningValue,
+                    pred.candidateSeenAt,
+                    officialValue,
+                    now,
+                    this.confirmationMs(),
+                )) {
+                    await pred.update({ resultCheckedAt: now }, { transaction: tx });
+                    const awaiting = await this.countAwaiting(predictionId, tx);
+                    return this.noResultChange(pred, awaiting, officialValue);
+                }
+                return this.applyConfirmedResultLocked(pred, type, officialValue, "openf1_session_result", tx);
+            }
+
+            // Le fournisseur confirme la valeur courante : on finalise à l'échéance.
+            if (pred.winningValue === officialValue) {
+                if (pred.reconciliationUntil && now >= pred.reconciliationUntil) {
+                    await pred.update({
+                        resultStatus: "final",
+                        candidateWinningValue: null,
+                        candidateSeenAt: null,
+                        resultCheckedAt: now,
+                        resultSource: "openf1_session_result",
+                    }, { transaction: tx });
+                    await this.recordResultRevision(pred.id, pred.winningValue, pred.winningValue, "final", "openf1_session_result", now, tx);
+                    return this.noResultChange(pred, 0, undefined, "final");
+                }
+                await pred.update({
+                    candidateWinningValue: null,
+                    candidateSeenAt: null,
+                    resultCheckedAt: now,
+                    resultSource: "openf1_session_result",
+                }, { transaction: tx });
+                return this.noResultChange(pred, 0);
+            }
+
+            // Changement officiel : lui aussi doit être stable entre deux observations.
+            if (pred.candidateWinningValue !== officialValue || !pred.candidateSeenAt) {
+                await pred.update({
+                    candidateWinningValue: officialValue,
+                    candidateSeenAt: now,
+                    resultCheckedAt: now,
+                    resultSource: "openf1_session_result",
+                }, { transaction: tx });
+                return this.noResultChange(pred, 0, officialValue);
+            }
+            if (!isResultCandidateConfirmed(
+                pred.candidateWinningValue,
+                pred.candidateSeenAt,
+                officialValue,
+                now,
+                this.confirmationMs(),
+            )) {
+                await pred.update({ resultCheckedAt: now }, { transaction: tx });
+                return this.noResultChange(pred, 0, officialValue);
+            }
+            return this.applyConfirmedResultLocked(pred, type, officialValue, "openf1_session_result", tx);
         });
 
-        logger.info(
-            {
-                predictionId,
-                winningValue: resolvedValue,
-                resolved: outcomes.length,
-                won: outcomes.filter((o) => o.won).length,
-                pointsAwarded: outcomes.reduce((s, o) => s + o.pointsAwarded, 0),
+        this.afterResultCommit(predictionId, result.outcomes, result.winningValue, result.resultStatus);
+        return result.response;
+    }
+
+    private noResultChange(
+        pred: PredictionModel,
+        awaiting: number,
+        candidateWinningValue?: string,
+        resultStatus?: "pending" | "provisional" | "corrected" | "final",
+    ) {
+        const status = resultStatus ?? pred.resultStatus ?? (pred.winningValue ? "final" : "pending");
+        return {
+            outcomes: [] as Outcome[],
+            winningValue: pred.winningValue ?? null,
+            resultStatus: status,
+            response: {
+                resolved: 0,
+                awaiting,
+                winningValue: pred.winningValue ?? null,
+                resultStatus: status,
+                candidateWinningValue: candidateWinningValue ?? null,
             },
-            "Prediction resolved",
+        };
+    }
+
+    private markAwaiting(predictionId: number, tx: Transaction) {
+        return PronosticModel.update(
+            { status: "awaiting_verification" },
+            { where: { predictionId, status: "submitted" }, transaction: tx },
+        ).then(([changed]) => changed);
+    }
+
+    private countAwaiting(predictionId: number, tx: Transaction) {
+        return PronosticModel.count({
+            where: { predictionId, status: { [Op.in]: [...RESOLVABLE_STATUSES] } },
+            transaction: tx,
+        });
+    }
+
+    private async applyConfirmedResultLocked(
+        pred: PredictionModel,
+        type: string,
+        winningValue: string,
+        source: ResultSource,
+        tx: Transaction,
+        actorUserId?: number,
+    ) {
+        const now = new Date();
+        const previousValue = pred.winningValue;
+        const isCorrection = Boolean(previousValue && previousValue !== winningValue);
+
+        // Même résultat rejoué : strictement idempotent.
+        if (previousValue === winningValue) return this.noResultChange(pred, 0);
+
+        const resultStatus: "corrected" | "provisional" = isCorrection ? "corrected" : "provisional";
+        const revisionId = await this.recordResultRevision(
+            pred.id,
+            previousValue,
+            winningValue,
+            resultStatus,
+            source,
+            now,
+            tx,
+            actorUserId,
         );
 
-        // 4. Notifications (après COMMIT, best-effort).
-        for (const o of outcomes) this.notifyOutcome(o, predictionId);
+        await pred.update({
+            winningValue,
+            resultStatus,
+            candidateWinningValue: null,
+            candidateSeenAt: null,
+            resultSource: source,
+            resultCheckedAt: now,
+            reconciliationUntil: this.reconciliationUntil(now),
+            resolvedAt: now,
+        }, { transaction: tx });
 
-        return { resolved: outcomes.length, awaiting: 0, winningValue: resolvedValue };
+        const statuses = isCorrection ? ["won", "lost"] : [...RESOLVABLE_STATUSES];
+        const pronostics = await this.repo.findPronosticsForResolution(pred.id, statuses, tx);
+        const outcomes: Outcome[] = [];
+        const affectedScores: Array<{ seasonId: number; userId: number }> = [];
+
+        for (const pronostic of pronostics) {
+            if (pronostic.scoringModel === "fixed_reward") {
+                const outcome = isCorrection
+                    ? await this.correctFixedReward(type, pronostic, winningValue, previousValue!, revisionId, tx, actorUserId)
+                    : await this.resolveFixedReward(type, pronostic, winningValue, tx);
+                if (outcome) {
+                    outcomes.push(outcome);
+                    if (isCorrection && pronostic.seasonId) {
+                        affectedScores.push({ seasonId: pronostic.seasonId, userId: pronostic.userId });
+                    }
+                }
+            } else if (isChampionshipMode()) {
+                this.skipLegacyInChampionship(pronostic);
+            } else {
+                outcomes.push(await this.resolveLegacy(type, pronostic, winningValue, tx));
+            }
+        }
+
+        if (affectedScores.length) await this.rebuildSeasonScores(affectedScores, now, tx);
+
+        return {
+            outcomes,
+            winningValue,
+            resultStatus,
+            response: {
+                resolved: outcomes.length,
+                awaiting: 0,
+                winningValue,
+                resultStatus,
+                corrected: isCorrection,
+            },
+        };
+    }
+
+    private async recordResultRevision(
+        predictionId: number,
+        previousValue: string | null,
+        newValue: string,
+        state: "provisional" | "corrected" | "final",
+        source: ResultSource,
+        observedAt: Date,
+        tx: Transaction,
+        actorUserId?: number,
+    ) {
+        const rows = await sequelize.query<{ id: string }>(
+            `INSERT INTO prediction_result_revisions
+                (prediction_id, previous_value, new_value, state, source, created_by, observed_at)
+             VALUES (:predictionId, :previousValue, :newValue, :state, :source, :actorUserId, :observedAt)
+             RETURNING id`,
+            {
+                replacements: { predictionId, previousValue, newValue, state, source, actorUserId: actorUserId ?? null, observedAt },
+                type: QueryTypes.SELECT,
+                transaction: tx,
+            },
+        );
+        return Number(rows[0].id);
+    }
+
+    private async correctFixedReward(
+        type: string,
+        pronostic: PronosticModel,
+        winningValue: string,
+        previousValue: string,
+        revisionId: number,
+        tx: Transaction,
+        actorUserId?: number,
+    ): Promise<Outcome | null> {
+        const userValue = pronostic.detail?.value ?? "";
+        const { correct, points } = userValue
+            ? computeAwardedPoints(
+                type,
+                userValue,
+                winningValue,
+                {
+                    rewardPoints: pronostic.rewardPointsSnapshot ?? 0,
+                    partialRewardPoints: pronostic.partialRewardPointsSnapshot ?? null,
+                },
+                (u, w) => isWinnerForType(type as any, u, w),
+            )
+            : { correct: false, points: 0 };
+        const previousPoints = pronostic.championshipPointsAwarded ?? 0;
+        const nextStatus = correct ? "won" : "lost";
+        const delta = points - previousPoints;
+        if (pronostic.status === nextStatus && delta === 0) return null;
+        if (!pronostic.seasonId) throw new Error(`fixed_reward pronostic ${pronostic.id} has no season_id`);
+
+        await pronostic.update(
+            { status: nextStatus, championshipPointsAwarded: points, resolvedAt: new Date() },
+            { transaction: tx },
+        );
+        if (delta !== 0) {
+            await sequelize.query(
+                `INSERT INTO championship_score_events
+                    (season_id, user_id, source_type, source_id, points, reason, created_by)
+                 VALUES
+                    (:seasonId, :userId, 'admin_correction',
+                     nextval('championship_admin_correction_source_id_seq'), :delta, :reason, :actorUserId)`,
+                {
+                    replacements: {
+                        seasonId: pronostic.seasonId,
+                        userId: pronostic.userId,
+                        delta,
+                        actorUserId: actorUserId ?? null,
+                        reason: `official_result_revision:${revisionId}:${previousValue}->${winningValue}:pronostic:${pronostic.id}`,
+                    },
+                    transaction: tx,
+                },
+            );
+        }
+
+        return {
+            userId: pronostic.userId,
+            pronosticId: pronostic.id,
+            value: userValue,
+            won: correct,
+            pointsAwarded: points,
+            pointsDelta: delta,
+            corrected: true,
+            scoringModel: "fixed_reward",
+        };
+    }
+
+    private async rebuildSeasonScores(
+        pairs: Array<{ seasonId: number; userId: number }>,
+        now: Date,
+        tx: Transaction,
+    ) {
+        const unique = Array.from(new Map(pairs.map((p) => [`${p.seasonId}:${p.userId}`, p])).values());
+        const seasonIds = unique.map((p) => p.seasonId);
+        const userIds = unique.map((p) => p.userId);
+
+        await sequelize.query(
+            `WITH affected AS (
+                 SELECT * FROM unnest(CAST($1 AS int[]), CAST($2 AS int[])) AS a(season_id, user_id)
+             )
+             INSERT INTO season_scores (season_id, user_id)
+             SELECT season_id, user_id FROM affected
+             ON CONFLICT (season_id, user_id) DO NOTHING`,
+            { bind: [seasonIds, userIds], transaction: tx },
+        );
+        await sequelize.query(
+            `WITH affected AS (
+                 SELECT * FROM unnest(CAST($1 AS int[]), CAST($2 AS int[])) AS a(season_id, user_id)
+             )
+             UPDATE season_scores ss
+                SET points = (SELECT COALESCE(SUM(e.points), 0)::int
+                                FROM championship_score_events e
+                               WHERE e.season_id = ss.season_id AND e.user_id = ss.user_id),
+                    correct_count = (SELECT COUNT(*)::int FROM pronostics p
+                                      WHERE p.season_id = ss.season_id AND p.user_id = ss.user_id
+                                        AND p.scoring_model = 'fixed_reward' AND p.status = 'won'),
+                    resolved_count = (SELECT COUNT(*)::int FROM pronostics p
+                                       WHERE p.season_id = ss.season_id AND p.user_id = ss.user_id
+                                         AND p.scoring_model = 'fixed_reward' AND p.status IN ('won', 'lost')),
+                    last_scored_at = (SELECT MAX(p.resolved_at) FROM pronostics p
+                                       WHERE p.season_id = ss.season_id AND p.user_id = ss.user_id
+                                         AND p.scoring_model = 'fixed_reward' AND p.status = 'won'),
+                    updated_at = $3
+               FROM affected a
+              WHERE ss.season_id = a.season_id AND ss.user_id = a.user_id`,
+            { bind: [seasonIds, userIds, now], transaction: tx },
+        );
+    }
+
+    private afterResultCommit(
+        predictionId: number,
+        outcomes: Outcome[],
+        winningValue: string | null,
+        resultStatus: string,
+    ) {
+        if (!outcomes.length) return;
+        logger.info({
+            predictionId,
+            winningValue,
+            resultStatus,
+            resolved: outcomes.length,
+            won: outcomes.filter((o) => o.won).length,
+            pointsAwarded: outcomes.reduce((sum, o) => sum + o.pointsAwarded, 0),
+        }, outcomes.some((o) => o.corrected) ? "Prediction result corrected" : "Prediction resolved provisionally");
+        for (const outcome of outcomes) this.notifyOutcome(outcome, predictionId);
     }
 
     /**
@@ -638,12 +1051,19 @@ export class PredictionsService {
                 status: o.won ? "won" : "lost",
                 value: o.value,
                 pointsAwarded: o.pointsAwarded,
+                ...(o.corrected ? { corrected: true, pointsDelta: o.pointsDelta ?? 0 } : {}),
             });
             void notifyUser(o.userId, {
-                title: o.won ? "🏁 Pronostic correct !" : "Résultat disponible",
-                body: o.won
-                    ? `${o.value} : +${o.pointsAwarded} points de championnat !`
-                    : `${o.value} : pas de points cette fois. Rendez-vous au prochain Grand Prix !`,
+                title: o.corrected
+                    ? "Résultat officiel corrigé"
+                    : o.won ? "🏁 Pronostic correct !" : "Résultat disponible",
+                body: o.corrected
+                    ? o.won
+                        ? `${o.value} devient correct : ${o.pointsAwarded} points de championnat.`
+                        : `${o.value} n'est plus le résultat officiel. Le classement a été ajusté.`
+                    : o.won
+                        ? `${o.value} : +${o.pointsAwarded} points de championnat !`
+                        : `${o.value} : pas de points cette fois. Rendez-vous au prochain Grand Prix !`,
                 data: { type: "prono", predictionId },
             });
             return;

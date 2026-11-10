@@ -4,6 +4,7 @@ import { LeaderboardService } from "./leaderboard.service";
 import { ChampionshipLeaderboardService } from "./leaderboard.championship.service";
 import { LeaderboardQuery, LeaderboardQueryDto } from "./leaderboard.dto";
 import { isChampionshipMode } from "../../config/env";
+import { LeaguesService } from "../leagues/leagues.service";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ export class LeaderboardController {
     constructor(
         private readonly service = new LeaderboardService(),
         private readonly championship = new ChampionshipLeaderboardService(),
+        private readonly leagues = new LeaguesService(),
     ) {}
 
     getGlobal = async (req: Request, res: Response, next: NextFunction) => {
@@ -96,6 +98,7 @@ export class LeaderboardController {
     getByLeague = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const leagueId = Number(req.params.leagueId);
+            await this.leagues.assertMember(leagueId, req.user!.id);
             const query = LeaderboardQueryDto.parse(req.query);
             if (isChampionshipMode()) {
                 const data = await this.championship.getByLeague(leagueId, query.limit, championshipOffset(query));
@@ -131,6 +134,7 @@ export class LeaderboardController {
         try {
             const sessionId = Number(req.params.sessionId);
             const leagueId  = Number(req.params.leagueId);
+            await this.leagues.assertMember(leagueId, req.user!.id);
             const query = LeaderboardQueryDto.parse(req.query);
             if (isChampionshipMode()) {
                 const data = await this.championship.getBySession(

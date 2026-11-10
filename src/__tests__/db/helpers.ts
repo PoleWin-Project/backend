@@ -26,7 +26,7 @@ export async function setupDb() {
 
 export async function resetDb() {
     await sequelize.query(`
-        TRUNCATE championship_score_events, season_scores, season_final_standings,
+        TRUNCATE prediction_result_revisions, championship_score_events, season_scores, season_final_standings,
                  garage_transactions, garage_wallets, prediction_reward_options,
                  pronostics_details, pronostics, predictions, race_sessions, seasons,
                  game_plays, user_badges, league_members, leagues, profiles, users

@@ -45,6 +45,8 @@ tags:
       description: Messages des canaux de chat
     - name: Leaderboard
       description: Classements globaux, par league et par session de pronostic
+    - name: Écuries privées
+      description: Création, invitation et gestion des championnats privés entre amis
     - name: DriverDle
       description: "Driver Guess — mini-jeu quotidien : devine le pilote F1 du jour (façon Wordle)"
 
@@ -741,6 +743,34 @@ paths:
                     $ref: "#/components/responses/NotFound"
 
     # ── Predictions ───────────────────────────────────────────────────────────
+
+    /api/v1/predictions/current-weekend:
+        get:
+            tags: [Predictions]
+            summary: Charger le prochain week-end de pronostics
+            description: >
+                Retourne en une réponse les prochaines sessions du même Grand Prix,
+                leurs prédictions, les barèmes déjà calculés et le pronostic éventuel
+                de l'utilisateur connecté. Les données essentielles proviennent de
+                PostgreSQL : cet endpoint ne contacte pas OpenF1 et ne bloque donc pas
+                l'affichage mobile sur une API externe.
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: Week-end courant, ou `null` si aucune session à venir n'est disponible
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/CurrentWeekendResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "500":
+                    description: Erreur inattendue pendant la lecture des données
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
 
     /api/v1/sessions/{sessionId}/predictions:
         get:
@@ -1628,6 +1658,12 @@ paths:
         get:
             tags: [OpenF1]
             summary: Pilotes d'une session
+            description: >
+                Retourne d'abord la grille publiée pour la session demandée. Si elle
+                n'est pas encore disponible, utilise la dernière session terminée du
+                même week-end, puis le classement de la saison. La grille possède un
+                cache court de 30 secondes afin de détecter rapidement un pilote
+                remplaçant sans ralentir l'affichage.
             parameters:
                 - name: sessionKey
                   in: path
@@ -1635,6 +1671,16 @@ paths:
                   schema:
                       type: integer
                       example: 9158
+                - name: fresh
+                  in: query
+                  required: false
+                  description: >
+                      Si `true`, ignore la grille en cache et vérifie immédiatement
+                      OpenF1. Utilisé notamment par le pull-to-refresh mobile.
+                  schema:
+                      type: boolean
+                      default: false
+                      example: true
             responses:
                 "200":
                     description: Liste des pilotes
@@ -2493,8 +2539,10 @@ paths:
     /api/v1/leaderboard/leagues/{leagueId}:
         get:
             tags: [Leaderboard]
-            summary: Classement d'une league
-            description: Retourne les membres d'une league triés par solde de points décroissant.
+            summary: Classement d'une Écurie privée
+            description: Retourne les membres de l'Écurie triés par points décroissants. Réservé à ses membres.
+            security:
+                - bearerAuth: []
             parameters:
                 - name: leagueId
                   in: path
@@ -2515,11 +2563,15 @@ paths:
                       type: string
             responses:
                 "200":
-                    description: Classement de la league
+                    description: Classement de l'Écurie
                     content:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/LeaderboardLeagueResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    description: L'utilisateur n'est pas membre de cette Écurie
                 "404":
                     $ref: "#/components/responses/NotFound"
 
@@ -2555,10 +2607,12 @@ paths:
     /api/v1/leaderboard/sessions/{sessionId}/leagues/{leagueId}:
         get:
             tags: [Leaderboard]
-            summary: Classement d'une session filtré à une league
+            summary: Classement d'une session filtré à une Écurie
             description: >
                 Même logique que le classement de session, mais restreint aux membres
-                d'une league donnée. Idéal pour les challenges entre amis.
+                d'une Écurie donnée. Réservé aux membres de cette Écurie.
+            security:
+                - bearerAuth: []
             parameters:
                 - $ref: "#/components/parameters/SessionId"
                 - name: leagueId
@@ -2580,11 +2634,247 @@ paths:
                       type: string
             responses:
                 "200":
-                    description: Classement de la session pour la league
+                    description: Classement de la session pour l'Écurie
                     content:
                         application/json:
                             schema:
                                 $ref: "#/components/schemas/LeaderboardSessionLeagueResponse"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "403":
+                    description: L'utilisateur n'est pas membre de cette Écurie
+                "404":
+                    $ref: "#/components/responses/NotFound"
+
+    # ── Écuries privées ───────────────────────────────────────────────────────
+
+    /api/v1/leagues:
+        get:
+            tags: [Écuries privées]
+            summary: Lister mes Écuries privées
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: Écuries dont l'utilisateur est membre
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                required: [status, leagues]
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    leagues:
+                                        type: array
+                                        items:
+                                            $ref: "#/components/schemas/LeagueSummary"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+        post:
+            tags: [Écuries privées]
+            summary: Créer une Écurie privée
+            description: Le créateur devient propriétaire et premier membre. Le mode de classement choisi est définitif. Limite de 10 Écuries dirigées.
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/LeagueNameRequest"
+            responses:
+                "201":
+                    description: Écurie créée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/LeagueDetailResponse"
+                "400":
+                    $ref: "#/components/responses/ValidationError"
+                "401":
+                    $ref: "#/components/responses/Unauthorized"
+                "409":
+                    description: Limite d'Écuries atteinte
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/leagues/join:
+        post:
+            tags: [Écuries privées]
+            summary: Rejoindre une Écurie avec un code
+            description: L'opération est idempotente si l'utilisateur est déjà membre. Une Écurie accepte jusqu'à 100 membres.
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            type: object
+                            required: [inviteCode]
+                            properties:
+                                inviteCode:
+                                    type: string
+                                    minLength: 6
+                                    maxLength: 16
+                                    example: PW7K4X2A
+            responses:
+                "200":
+                    description: L'utilisateur était déjà membre
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/LeagueJoinResponse"
+                "201":
+                    description: Écurie rejointe
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/LeagueJoinResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+                "409":
+                    description: Écurie complète
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+
+    /api/v1/leagues/{leagueId}:
+        parameters:
+            - $ref: "#/components/parameters/LeagueId"
+        get:
+            tags: [Écuries privées]
+            summary: Consulter une Écurie et son classement
+            description: Réservé aux membres. Les points correspondent à la saison de championnat active.
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: Détail et classement de l'Écurie
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/LeagueDetailResponse"
+                "403":
+                    description: L'utilisateur n'est pas membre
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ErrorResponse"
+                "404":
+                    $ref: "#/components/responses/NotFound"
+        patch:
+            tags: [Écuries privées]
+            summary: Renommer une Écurie
+            description: Réservé au propriétaire.
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: "#/components/schemas/LeagueNameRequest"
+            responses:
+                "200":
+                    description: Écurie renommée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/LeagueDetailResponse"
+                "403":
+                    description: Action réservée au propriétaire
+        delete:
+            tags: [Écuries privées]
+            summary: Supprimer une Écurie
+            description: Réservé au propriétaire. Supprime également toutes les adhésions.
+            security:
+                - bearerAuth: []
+            responses:
+                "200":
+                    description: Écurie supprimée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "403":
+                    description: Action réservée au propriétaire
+
+    /api/v1/leagues/{leagueId}/invite-code:
+        post:
+            tags: [Écuries privées]
+            summary: Régénérer le code d'invitation
+            description: Réservé au propriétaire. L'ancien code devient immédiatement invalide.
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/LeagueId"
+            responses:
+                "200":
+                    description: Nouveau code généré
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                required: [status, inviteCode]
+                                properties:
+                                    status:
+                                        type: string
+                                        example: ok
+                                    inviteCode:
+                                        type: string
+                                        example: PW9R3M6Q
+                "403":
+                    description: Action réservée au propriétaire
+
+    /api/v1/leagues/{leagueId}/members/me:
+        delete:
+            tags: [Écuries privées]
+            summary: Quitter une Écurie
+            description: Le propriétaire doit supprimer l'Écurie et ne peut pas la quitter.
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/LeagueId"
+            responses:
+                "200":
+                    description: Écurie quittée
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "409":
+                    description: Le propriétaire ne peut pas quitter l'Écurie
+
+    /api/v1/leagues/{leagueId}/members/{userId}:
+        delete:
+            tags: [Écuries privées]
+            summary: Retirer un membre
+            description: Réservé au propriétaire. Le propriétaire ne peut pas se retirer lui-même.
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: "#/components/parameters/LeagueId"
+                - name: userId
+                  in: path
+                  required: true
+                  schema:
+                      type: integer
+                      minimum: 1
+            responses:
+                "200":
+                    description: Membre retiré
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/StatusOkResponse"
+                "403":
+                    description: Action réservée au propriétaire
                 "404":
                     $ref: "#/components/responses/NotFound"
 
@@ -2680,6 +2970,14 @@ components:
             schema:
                 type: integer
                 example: 5
+        LeagueId:
+            name: leagueId
+            in: path
+            required: true
+            schema:
+                type: integer
+                minimum: 1
+                example: 3
 
     responses:
         NotFound:
@@ -2853,6 +3151,156 @@ components:
                     format: date-time
 
         # ── Predictions & Pronostics ───────────────────────────────────────────
+
+        PredictionRewardOption:
+            type: object
+            required: [value, rewardPoints]
+            properties:
+                value:
+                    type: string
+                    description: Acronyme du pilote, réponse binaire ou valeur générique `*`
+                    example: LEC
+                rewardPoints:
+                    type: integer
+                    description: Points de championnat attribués si la réponse est correcte
+                    example: 120
+                partialRewardPoints:
+                    type: integer
+                    nullable: true
+                    description: Points attribués pour un résultat partiellement correct, notamment un podium désordonné
+                    example: 60
+
+        CurrentWeekendPronostic:
+            type: object
+            required: [id, predictionId, status]
+            properties:
+                id:
+                    type: integer
+                    example: 42
+                predictionId:
+                    type: integer
+                    example: 12
+                status:
+                    type: string
+                    enum: [draft, submitted, awaiting_verification, won, lost, void]
+                    example: submitted
+                scoringModel:
+                    type: string
+                    enum: [legacy_stake, fixed_reward]
+                    example: fixed_reward
+                rewardPointsSnapshot:
+                    type: integer
+                    nullable: true
+                    example: 120
+                partialRewardPointsSnapshot:
+                    type: integer
+                    nullable: true
+                    example: null
+                championshipPointsAwarded:
+                    type: integer
+                    example: 0
+                detail:
+                    type: object
+                    nullable: true
+                    properties:
+                        value:
+                            type: string
+                            example: LEC
+
+        CurrentWeekendPrediction:
+            type: object
+            required: [id, sessionId, type, rewardOptions]
+            properties:
+                id:
+                    type: integer
+                    example: 12
+                sessionId:
+                    type: integer
+                    example: 5
+                type:
+                    type: string
+                    enum: [POLE_POSITION, RACE_WINNER, FASTEST_LAP, DNF, SAFETY_CAR, SPRINT_WINNER, PODIUM]
+                    example: RACE_WINNER
+                closesAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    example: "2026-11-08T13:00:00.000Z"
+                winningValue:
+                    type: string
+                    nullable: true
+                    example: null
+                rewardOptions:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/PredictionRewardOption"
+                pronostic:
+                    nullable: true
+                    allOf:
+                        - $ref: "#/components/schemas/CurrentWeekendPronostic"
+
+        CurrentWeekendSession:
+            type: object
+            required: [id, name, type, dateStart, predictions]
+            properties:
+                id:
+                    type: integer
+                    example: 5
+                idCourseExternal:
+                    type: integer
+                    nullable: true
+                    description: Clé de session OpenF1
+                    example: 11404
+                name:
+                    type: string
+                    example: "Brazil - Race"
+                type:
+                    type: string
+                    example: Race
+                location:
+                    type: string
+                    nullable: true
+                    example: Interlagos
+                dateStart:
+                    type: string
+                    format: date-time
+                    example: "2026-11-08T13:00:00.000Z"
+                predictions:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/CurrentWeekendPrediction"
+
+        CurrentWeekend:
+            type: object
+            required: [name, seasonYear, sessions]
+            properties:
+                name:
+                    type: string
+                    example: Brazil
+                location:
+                    type: string
+                    nullable: true
+                    example: Interlagos
+                seasonYear:
+                    type: integer
+                    example: 2026
+                sessions:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/CurrentWeekendSession"
+
+        CurrentWeekendResponse:
+            type: object
+            required: [status, weekend]
+            properties:
+                status:
+                    type: string
+                    enum: [ok]
+                    example: ok
+                weekend:
+                    nullable: true
+                    allOf:
+                        - $ref: "#/components/schemas/CurrentWeekend"
 
         Prediction:
             type: object
@@ -4391,6 +4839,166 @@ components:
                 limit:
                     type: integer
                     example: 50
+
+        # ── Écuries privées ──────────────────────────────────────────────────
+
+        LeagueNameRequest:
+            type: object
+            required: [name]
+            properties:
+                name:
+                    type: string
+                    minLength: 3
+                    maxLength: 32
+                    example: Scuderia des Potes
+                scoringMode:
+                    type: string
+                    enum: [season, from_join]
+                    default: season
+                    description: "season reprend les points de la saison ; from_join fait commencer chaque membre à zéro lors de son arrivée."
+
+        LeagueSummary:
+            type: object
+            required: [id, name, ownerUserId, ownerUsername, seasonYear, inviteCode, scoringMode, createdAt, memberCount, role]
+            properties:
+                id:
+                    type: integer
+                    example: 3
+                name:
+                    type: string
+                    example: Scuderia des Potes
+                ownerUserId:
+                    type: integer
+                    example: 12
+                ownerUsername:
+                    type: string
+                    example: alexf1
+                seasonYear:
+                    type: integer
+                    example: 2026
+                inviteCode:
+                    type: string
+                    example: PW7K4X2A
+                scoringMode:
+                    type: string
+                    enum: [season, from_join]
+                    example: from_join
+                createdAt:
+                    type: string
+                    format: date-time
+                memberCount:
+                    type: integer
+                    example: 8
+                role:
+                    type: string
+                    enum: [owner, member]
+                    example: owner
+
+        LeagueMember:
+            type: object
+            required: [id, userId, username, points, joinedAt, isOwner, rank]
+            properties:
+                id:
+                    type: integer
+                    example: 12
+                userId:
+                    type: integer
+                    example: 12
+                username:
+                    type: string
+                    example: alexf1
+                displayName:
+                    type: string
+                    nullable: true
+                    example: Alexandre
+                avatarUrl:
+                    type: string
+                    format: uri
+                    nullable: true
+                points:
+                    type: integer
+                    minimum: 0
+                    example: 184
+                joinedAt:
+                    type: string
+                    format: date-time
+                isOwner:
+                    type: boolean
+                    example: true
+                rank:
+                    type: integer
+                    minimum: 1
+                    example: 1
+                cosmetics:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+
+        LeagueDetail:
+            type: object
+            required: [id, name, ownerUserId, seasonYear, inviteCode, scoringMode, createdAt, memberCount, canManage, members]
+            properties:
+                id:
+                    type: integer
+                    example: 3
+                name:
+                    type: string
+                    example: Scuderia des Potes
+                ownerUserId:
+                    type: integer
+                    example: 12
+                ownerUsername:
+                    type: string
+                    nullable: true
+                    example: alexf1
+                seasonYear:
+                    type: integer
+                    example: 2026
+                inviteCode:
+                    type: string
+                    example: PW7K4X2A
+                scoringMode:
+                    type: string
+                    enum: [season, from_join]
+                    example: from_join
+                createdAt:
+                    type: string
+                    format: date-time
+                memberCount:
+                    type: integer
+                    example: 8
+                myRank:
+                    type: integer
+                    nullable: true
+                    example: 2
+                canManage:
+                    type: boolean
+                    example: true
+                members:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/LeagueMember"
+
+        LeagueDetailResponse:
+            type: object
+            required: [status, league]
+            properties:
+                status:
+                    type: string
+                    example: ok
+                league:
+                    $ref: "#/components/schemas/LeagueDetail"
+
+        LeagueJoinResponse:
+            allOf:
+                - $ref: "#/components/schemas/LeagueDetailResponse"
+                - type: object
+                  required: [joined]
+                  properties:
+                      joined:
+                          type: boolean
+                          description: Vrai si une nouvelle adhésion a été créée.
+                          example: true
 
         # ── Erreurs ───────────────────────────────────────────────────────────
 

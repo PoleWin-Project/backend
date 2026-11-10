@@ -54,19 +54,24 @@ export class ChampionshipLeaderboardService {
      * season_scores), éventuellement restreints aux membres d'une ligue.
      */
     private baseSQL(leagueFilter: boolean) {
+        const pointsExpression = leagueFilter
+            ? `CASE WHEN l.scoring_mode = 'from_join'
+                    THEN GREATEST(COALESCE(s.points, 0) - lm.points_baseline, 0)
+                    ELSE COALESCE(s.points, 0) END`
+            : "COALESCE(s.points, 0)";
         return `
             SELECT u.id                               AS "userId",
                    u.username,
                    p.display_name                     AS "displayName",
                    p.avatar_url                       AS "avatarUrl",
-                   COALESCE(s.points, 0)              AS points,
+                   ${pointsExpression}                AS points,
                    COALESCE(s.correct_count, 0)       AS "correctCount",
                    COALESCE(s.resolved_count, 0)      AS "resolvedCount",
                    CASE WHEN COALESCE(s.resolved_count, 0) = 0 THEN 0
                         ELSE ROUND(s.correct_count * 100.0 / s.resolved_count)::int END AS "winRate"
               FROM users u
               JOIN profiles p ON p.user_id = u.id
-              ${leagueFilter ? "JOIN league_members lm ON lm.user_id = u.id AND lm.league_id = :leagueId" : ""}
+              ${leagueFilter ? "JOIN league_members lm ON lm.user_id = u.id AND lm.league_id = :leagueId JOIN leagues l ON l.id = lm.league_id" : ""}
               LEFT JOIN season_scores s ON s.user_id = u.id AND s.season_id = :seasonId
         `;
     }
@@ -143,12 +148,12 @@ export class ChampionshipLeaderboardService {
     }
 
     async getByLeague(leagueId: number, limit: number, offset: number) {
-        const league = await LeagueModel.findByPk(leagueId, { attributes: ["id", "name", "seasonYear"] });
+        const league = await LeagueModel.findByPk(leagueId, { attributes: ["id", "name", "seasonYear", "scoringMode"] });
         if (!league) throw httpErrors.notFound("League not found");
         const season = await this.requireActiveSeason();
         const page = await this.rankedPage({ seasonId: season.id, sort: "points", limit, offset, leagueId });
         return {
-            league: { id: league.id, name: league.name, seasonYear: league.seasonYear },
+            league: { id: league.id, name: league.name, seasonYear: league.seasonYear, scoringMode: league.scoringMode },
             season: { id: season.id, code: season.code, name: season.name },
             ...page,
             limit,

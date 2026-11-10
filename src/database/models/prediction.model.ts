@@ -23,6 +23,12 @@ export class PredictionModel extends Model<
 	declare scope: string | null;
 	declare closesAt: Date | null;
 	declare winningValue: string | null;
+	declare resultStatus: CreationOptional<"pending" | "provisional" | "corrected" | "final">;
+	declare candidateWinningValue: CreationOptional<string | null>;
+	declare candidateSeenAt: CreationOptional<Date | null>;
+	declare resultSource: CreationOptional<string | null>;
+	declare resultCheckedAt: CreationOptional<Date | null>;
+	declare reconciliationUntil: CreationOptional<Date | null>;
 	declare createdAt: CreationOptional<Date>;
 
 	// ── Modèle « championship » ──────────────────────────────────────────────
@@ -58,6 +64,17 @@ export class PredictionModel extends Model<
 				scope: { type: DataTypes.STRING, allowNull: true },
 				closesAt: { type: DataTypes.DATE, allowNull: true, field: "closes_at" },
 				winningValue: { type: DataTypes.STRING, allowNull: true, field: "winning_value" },
+				resultStatus: {
+					type: DataTypes.STRING(16),
+					allowNull: false,
+					defaultValue: "pending",
+					field: "result_status",
+				},
+				candidateWinningValue: { type: DataTypes.STRING, allowNull: true, field: "candidate_winning_value" },
+				candidateSeenAt: { type: DataTypes.DATE, allowNull: true, field: "candidate_seen_at" },
+				resultSource: { type: DataTypes.STRING(64), allowNull: true, field: "result_source" },
+				resultCheckedAt: { type: DataTypes.DATE, allowNull: true, field: "result_checked_at" },
+				reconciliationUntil: { type: DataTypes.DATE, allowNull: true, field: "reconciliation_until" },
 				seasonId: { type: DataTypes.INTEGER, allowNull: true, field: "season_id" },
 				rewardRuleVersion: { type: DataTypes.STRING(32), allowNull: true, field: "reward_rule_version" },
 				resolvedAt: { type: DataTypes.DATE, allowNull: true, field: "resolved_at" },

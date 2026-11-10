@@ -18,10 +18,12 @@ jest.mock("../../modules/push/push.service", () => ({
 import fs from "fs";
 import path from "path";
 import request from "supertest";
+import { QueryTypes } from "sequelize";
 import { env } from "../../config/env";
 import {
     ChampionshipScoreEventModel,
     GamePlayModel,
+    PredictionModel,
     PredictionRewardOptionModel,
     ProfileModel,
     PronosticModel,
@@ -247,6 +249,52 @@ describe("Résolution", () => {
         for (const u of users) expect(await seasonPoints(u.id)).toBe(100);
         const season = (await SeasonScoreModel.findOne())!.seasonId;
         expect(await championshipService.findScoreDrifts(season)).toEqual([]);
+    });
+
+    it("réattribue les points si le classement officiel change après la résolution", async () => {
+        await createActiveSeason();
+        const admin = await createUser("resolver", { role: "admin" });
+        const [oldWinner, officialWinner] = [await createUser("oldwinner"), await createUser("officialwinner")];
+        const { prediction } = await createOpenPrediction();
+        const oldProno = await predictions.placePronostic(oldWinner.id, prediction.id, { value: "VER" });
+        const officialProno = await predictions.placePronostic(officialWinner.id, prediction.id, { value: "NOR" });
+
+        await predictions.resolve(prediction.id, { winningValue: "VER" }, admin.id);
+        expect(await seasonPoints(oldWinner.id)).toBe(oldProno!.rewardPointsSnapshot);
+        expect(await seasonPoints(officialWinner.id)).toBe(0);
+
+        const corrected = await predictions.resolve(prediction.id, { winningValue: "NOR", force: true }, admin.id);
+
+        expect(corrected).toMatchObject({
+            winningValue: "NOR",
+            resultStatus: "corrected",
+            corrected: true,
+            resolved: 2,
+        });
+        expect(await seasonPoints(oldWinner.id)).toBe(0);
+        expect(await seasonPoints(officialWinner.id)).toBe(officialProno!.rewardPointsSnapshot);
+        expect((await PronosticModel.findByPk(oldProno!.id))!.status).toBe("lost");
+        expect((await PronosticModel.findByPk(officialProno!.id))!.status).toBe("won");
+        expect((await PredictionModel.findByPk(prediction.id))!.resultStatus).toBe("corrected");
+        expect(await ChampionshipScoreEventModel.count()).toBe(3); // attribution initiale, retrait, nouvelle attribution
+
+        const revisions = await PredictionModel.sequelize!.query<{ state: string; previous_value: string | null; new_value: string; created_by: number }>(
+            "SELECT state, previous_value, new_value, created_by FROM prediction_result_revisions WHERE prediction_id = :id ORDER BY id",
+            { replacements: { id: prediction.id }, type: QueryTypes.SELECT },
+        );
+        expect(revisions).toMatchObject([
+            { state: "provisional", previous_value: null, new_value: "VER", created_by: admin.id },
+            { state: "corrected", previous_value: "VER", new_value: "NOR", created_by: admin.id },
+        ]);
+        expect(await ChampionshipScoreEventModel.count({
+            where: { sourceType: "admin_correction", createdBy: admin.id },
+        })).toBe(2);
+        const season = (await SeasonScoreModel.findOne())!.seasonId;
+        expect(await championshipService.findScoreDrifts(season)).toEqual([]);
+
+        const replay = await predictions.resolve(prediction.id, { winningValue: "NOR", force: true }, admin.id);
+        expect(replay.resolved).toBe(0);
+        expect(await ChampionshipScoreEventModel.count()).toBe(3);
     });
 
     it("la base refuse un événement de pronostic négatif ou nul", async () => {

@@ -5,6 +5,7 @@ jest.mock("../../database/sequelize", () => ({
 }));
 
 const mockRepo = {
+    findCurrentWeekend:                 jest.fn(),
     findAllBySession:                  jest.fn(),
     findById:                          jest.fn(),
     create:                            jest.fn(),
@@ -27,6 +28,10 @@ jest.mock("./predictions.autoresolve", () => ({
     isWinnerForType: jest.requireActual("./predictions.autoresolve").isWinnerForType,
 }));
 
+jest.mock("../push/push.service", () => ({
+    notifyUser: jest.fn(),
+}));
+
 import { PredictionsService } from "./predictions.service";
 import { autoResolve } from "./predictions.autoresolve";
 const mockAutoResolve = autoResolve as jest.Mock;
@@ -39,6 +44,52 @@ describe("PredictionsService", () => {
     });
 
     // ── CRUD ────────────────────────────────────────────────────────────────────
+
+    describe("getCurrentWeekend", () => {
+        it("agrège les sessions, les barèmes et le pronostic du joueur", async () => {
+            mockRepo.findCurrentWeekend.mockResolvedValue([{
+                id: 10,
+                idCourseExternal: 9001,
+                name: "France - Race",
+                type: "Race",
+                location: "Le Castellet",
+                dateStart: "2026-06-28T13:00:00.000Z",
+                predictions: [{
+                    id: 20,
+                    sessionId: 10,
+                    type: "RACE_WINNER",
+                    closesAt: "2026-06-28T13:00:00.000Z",
+                    rewardOptions: [{ optionValue: "VER", rewardPoints: 100, partialRewardPoints: null }],
+                    pronostics: [{
+                        id: 30,
+                        predictionId: 20,
+                        status: "submitted",
+                        detail: { value: "VER" },
+                    }],
+                }],
+            }]);
+
+            await expect(service.getCurrentWeekend(7)).resolves.toMatchObject({
+                name: "France",
+                location: "Le Castellet",
+                seasonYear: 2026,
+                sessions: [{
+                    id: 10,
+                    predictions: [{
+                        id: 20,
+                        rewardOptions: [{ value: "VER", rewardPoints: 100 }],
+                        pronostic: { id: 30, detail: { value: "VER" } },
+                    }],
+                }],
+            });
+            expect(mockRepo.findCurrentWeekend).toHaveBeenCalledWith(7);
+        });
+
+        it("renvoie null quand aucun week-end n'est encore en base", async () => {
+            mockRepo.findCurrentWeekend.mockResolvedValue([]);
+            await expect(service.getCurrentWeekend(7)).resolves.toBeNull();
+        });
+    });
 
     describe("getBySession", () => {
         it("returns all predictions for a session", async () => {

@@ -1,6 +1,7 @@
 import { Op, Transaction } from "sequelize";
 import {
     PredictionModel,
+    PredictionRewardOptionModel,
     PronosticModel,
     PronosticDetailModel,
     ProfileModel,
@@ -24,6 +25,72 @@ export function countPronosticsForSession(sessionId: number) {
 }
 
 export class PredictionsRepository {
+
+    /**
+     * Charge le prochain week-end directement depuis PostgreSQL.
+     *
+     * Cette lecture agrège les sessions, les prédictions, leurs barèmes déjà
+     * calculés et les pronostics du joueur. Elle ne contacte
+     * volontairement jamais OpenF1 : l'écran doit rester utilisable même si le
+     * fournisseur externe est lent ou momentanément indisponible.
+     */
+    async findCurrentWeekend(userId: number) {
+        const sessionTypes = ["Race", "Qualifying", "Sprint"];
+        const upcomingWhere = {
+            dateStart: { [Op.gte]: new Date() },
+            // Quelques anciennes lignes ont un champ `type` incorrect. Le nom
+            // synchronisé sert de repli pour ne pas masquer tout le week-end.
+            [Op.or]: [
+                { type: { [Op.in]: sessionTypes } },
+                { name: { [Op.iLike]: "% - Race" } },
+                { name: { [Op.iLike]: "% - Qualifying" } },
+                { name: { [Op.iLike]: "% - Sprint" } },
+            ],
+        };
+        const nearest = await RaceSessionModel.findOne({
+            where: upcomingWhere,
+            order: [["dateStart", "ASC"]],
+        });
+
+        if (!nearest) return [];
+
+        const eventName = nearest.name.includes(" - ")
+            ? nearest.name.split(" - ")[0].trim()
+            : nearest.name;
+        const weekendWhere: any = { ...upcomingWhere };
+
+        // La localisation est le lien le plus stable entre Sprint, Qualifs et
+        // Course. Le préfixe du nom sert de repli pour les anciennes données.
+        if (nearest.location) {
+            weekendWhere.location = nearest.location;
+        } else {
+            weekendWhere.name = { [Op.like]: `${eventName} - %` };
+        }
+
+        return RaceSessionModel.findAll({
+            where: weekendWhere,
+            include: [{
+                model: PredictionModel,
+                as: "predictions",
+                required: false,
+                include: [
+                    {
+                        model: PredictionRewardOptionModel,
+                        as: "rewardOptions",
+                        required: false,
+                    },
+                    {
+                        model: PronosticModel,
+                        as: "pronostics",
+                        required: false,
+                        where: { userId },
+                        include: [{ model: PronosticDetailModel, as: "detail", required: false }],
+                    },
+                ],
+            }],
+            order: [["dateStart", "ASC"]],
+        });
+    }
 
     findAllBySession(sessionId: number) {
         return PredictionModel.findAll({
